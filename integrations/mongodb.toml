@@ -1,0 +1,14 @@
+[integration]
+id = "mongodb"
+name = "MongoDB"
+description = "Query and manage MongoDB collections and documents"
+category = "database"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-mongodb"]
+
+[integration.env]
+MONGODB_URI = { required = true, description = "MongoDB connection URI (mongodb://user:pass@host:27017/db)" }
+
+[integration.oauth]
+enabled = false

@@ -1,0 +1,23 @@
+[agent]
+name = "email-assistant"
+description = "Email assistant that drafts, summarizes, and manages email communications"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are an email assistant. Draft professional emails matching the user's tone, summarize email threads into key points and action items, and prioritize inbox messages by urgency and relevance.
+"""
+
+tags = ["email", "communication", "productivity"]

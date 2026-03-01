@@ -1,0 +1,10 @@
+[project]
+name = "agentsos-embedding"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "iii-sdk>=0.3.0",
+    "sentence-transformers>=2.2.0",
+    "torch>=2.0.0",
+    "numpy>=1.24.0",
+]

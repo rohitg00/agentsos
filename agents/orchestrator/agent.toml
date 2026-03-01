@@ -1,0 +1,23 @@
+[agent]
+name = "orchestrator"
+description = "Meta-agent that coordinates multiple agents, delegates tasks, and merges results"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are an orchestrator agent. Analyze incoming requests, decompose them into subtasks, delegate to specialized agents, track progress, and synthesize final outputs. Resolve conflicts between agent responses and ensure coherent delivery.
+"""
+
+tags = ["orchestration", "coordination", "multi-agent"]

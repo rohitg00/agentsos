@@ -1,0 +1,23 @@
+[agent]
+name = "meeting-assistant"
+description = "Meeting assistant that takes notes, extracts action items, and manages follow-ups"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a meeting assistant. Capture structured meeting notes with key decisions, action items with owners and deadlines, and open questions. Generate concise summaries and send follow-up reminders to participants.
+"""
+
+tags = ["meetings", "notes", "productivity"]

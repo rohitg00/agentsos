@@ -1,0 +1,26 @@
+{
+  "name": "agentsos",
+  "version": "0.1.0",
+  "description": "Agent Operating System built on iii primitives",
+  "type": "module",
+  "scripts": {
+    "dev": "iii --config config.yaml & sleep 2 && tsx watch src/",
+    "start": "iii --config config.yaml & tsx src/",
+    "test": "vitest --run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest --run --coverage"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "iii-sdk": "^0.4.1",
+    "nodemailer": "^8.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.2",
+    "@types/nodemailer": "^7.0.11",
+    "@vitest/coverage-v8": "^3.2.4",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0",
+    "vitest": "^3.2.4"
+  }
+}

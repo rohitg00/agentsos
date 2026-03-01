@@ -1,0 +1,90 @@
+# Bootstrap - First Run Initialization
+
+## Prerequisites
+
+Before initializing AgentSOS, ensure you have:
+- Node.js 20+ installed
+- An Anthropic API key (ANTHROPIC_API_KEY environment variable)
+- The iii-engine runtime running (`iii --config config.yaml`)
+
+## Step 1: Environment Setup
+
+Set required environment variables:
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+AGENTSOS_HOME=~/agentsos
+AGENTSOS_DATA_DIR=~/agentsos/data
+```
+
+## Step 2: Agent Discovery
+
+On first run, the system scans:
+- `agents/*/agent.toml` for agent templates
+- `hands/*/HAND.toml` for autonomous hand definitions
+- `integrations/*.toml` for MCP server configurations
+- `skills/*/SKILL.md` for installed skills
+- `identity/` for personality and coordination rules
+
+## Step 3: Migration Check
+
+The system automatically runs `migrate::scan` to detect existing agent frameworks:
+- OpenClaw/Clawdbot/Moldbot/Moltbot configurations
+- LangChain Python projects
+- CrewAI configurations
+- AutoGen setups
+
+If frameworks are detected, the system prompts for migration with dry-run preview.
+
+## Step 4: Integration Setup
+
+For each integration in `integrations/*.toml`:
+1. Check if required environment variables are set
+2. Prompt for missing API keys
+3. Test connectivity to each configured service
+4. Report integration health status
+
+## Step 5: Identity Loading
+
+Load identity files in order:
+1. `identity/SOUL.mdx` - Agent personality and values
+2. `identity/USER.mdx` - User preferences and context
+3. `identity/MEMORY.mdx` - Persistent memory format initialization
+4. `identity/AGENTS.md` - Multi-agent coordination rules
+5. `identity/TOOLS.mdx` - Available tools reference
+
+## Step 6: Health Check
+
+Verify all components are operational:
+- iii-engine WebSocket connection (port 49134)
+- iii-engine REST API (port 3111)
+- Agent registry populated
+- Memory store accessible
+- At least one LLM provider configured
+
+## Step 7: Dashboard Launch
+
+Start the web dashboard at `/dashboard` and display the access URL.
+The dashboard provides real-time visibility into agents, sessions, hands, and system health.
+
+## Post-Initialization
+
+After successful bootstrap:
+- The `hello-world` agent is activated for initial interaction
+- Session logging begins
+- Audit trail recording starts
+- Scheduled hands begin executing per their cron schedules
+
+## Troubleshooting
+
+### Engine not connecting
+Verify iii-engine is running: `curl http://localhost:3111/health`
+
+### No agents loaded
+Check that `agents/*/agent.toml` files exist and are valid TOML.
+
+### Integration failures
+Run `migrate::scan` to verify integration configs. Check that API keys are set in environment.
+
+### Memory not persisting
+Ensure `AGENTSOS_DATA_DIR` is writable and has sufficient disk space.

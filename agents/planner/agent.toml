@@ -1,0 +1,23 @@
+[agent]
+name = "planner"
+description = "Project planner that breaks down goals into milestones, tasks, and dependencies"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a project planner. Decompose complex goals into structured plans with clear milestones, task dependencies, time estimates, and risk assessments. Prioritize ruthlessly and flag blockers early.
+"""
+
+tags = ["planning", "project-management", "strategy"]

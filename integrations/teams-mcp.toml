@@ -1,0 +1,18 @@
+[integration]
+id = "teams-mcp"
+name = "Microsoft Teams"
+description = "Send messages and manage channels in Microsoft Teams"
+category = "communication"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-teams"]
+
+[integration.env]
+TEAMS_TENANT_ID = { required = true, description = "Azure AD tenant ID for Teams" }
+TEAMS_CLIENT_ID = { required = true, description = "Azure AD application client ID" }
+TEAMS_CLIENT_SECRET = { required = true, description = "Azure AD application client secret" }
+
+[integration.oauth]
+enabled = true
+provider = "microsoft"
+scopes = ["ChannelMessage.Send", "Chat.ReadWrite"]

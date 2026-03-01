@@ -1,0 +1,94 @@
+# Persistent Memory Format
+
+## Memory Architecture
+
+AgentSOS uses a hierarchical memory system with four tiers:
+
+### Tier 1: Working Memory (Session-Scoped)
+- Current conversation context
+- Active tool results
+- In-progress task state
+- TTL: Duration of session
+
+### Tier 2: Short-Term Memory (24 hours)
+- Recent observations and facts learned
+- Tool output summaries
+- User corrections and preferences expressed in session
+- TTL: 24 hours, promoted to Tier 3 if referenced again
+
+### Tier 3: Long-Term Memory (Persistent)
+- Validated facts and learned patterns
+- User preferences confirmed across sessions
+- Project-specific knowledge
+- Agent self-improvements
+- TTL: Indefinite, subject to eviction policy
+
+### Tier 4: Archival Memory (Compressed)
+- Summarized session histories
+- Aggregated statistics
+- Deprecated but potentially useful knowledge
+- TTL: Indefinite, lowest retrieval priority
+
+## Memory Entry Schema
+
+```
+{
+  "id": "mem_<ulid>",
+  "type": "observation" | "fact" | "preference" | "correction" | "summary",
+  "content": "The actual memory content",
+  "source": {
+    "agent": "agent-name",
+    "session": "session-id",
+    "timestamp": "ISO-8601"
+  },
+  "metadata": {
+    "confidence": 0.0-1.0,
+    "importance": 1-10,
+    "access_count": 0,
+    "last_accessed": "ISO-8601",
+    "tags": ["tag1", "tag2"],
+    "related_ids": ["mem_xxx"]
+  },
+  "tier": 1 | 2 | 3 | 4,
+  "expires_at": "ISO-8601 | null"
+}
+```
+
+## Eviction Policy
+
+1. Tier 2 entries not accessed within 24 hours are discarded
+2. Tier 3 entries with importance < 3 and access_count < 2 after 90 days are archived to Tier 4
+3. Tier 4 entries are summarized in batches of 50 to reduce storage
+4. Per-project cap: 10,000 Tier 3 entries, oldest low-importance entries evicted first
+5. Contradicted memories (superseded by corrections) are marked deprecated
+
+## Search
+
+Memories are retrieved via hybrid search:
+- BM25 keyword matching (weight: 0.4)
+- Vector similarity search (weight: 0.6)
+- Results ranked by Reciprocal Rank Fusion
+- Boosted by recency and access frequency
+
+## Operations
+
+### Store
+```
+memory::store { content, type, tags, importance }
+```
+
+### Query
+```
+memory::query { query, limit, tier, tags, min_confidence }
+```
+
+### Forget
+```
+memory::forget { id | query, reason }
+```
+
+### Evolve
+```
+memory::evolve { id, new_content, reason }
+```
+Creates a new version linked to the original via parentId.

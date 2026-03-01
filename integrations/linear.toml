@@ -1,0 +1,16 @@
+[integration]
+id = "linear"
+name = "Linear"
+description = "Manage Linear issues, projects, and cycles"
+category = "project-management"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-linear"]
+
+[integration.env]
+LINEAR_API_KEY = { required = true, description = "Linear API key" }
+
+[integration.oauth]
+enabled = true
+provider = "linear"
+scopes = ["read", "write", "issues:create"]

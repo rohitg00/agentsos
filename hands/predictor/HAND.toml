@@ -1,0 +1,68 @@
+[hand]
+id = "predictor"
+name = "Trend Predictor"
+description = "Analyzes collected data to identify patterns, forecast trends, and generate predictive insights"
+enabled = true
+schedule = "0 0 * * *"
+
+[hand.tools]
+allowed = ["memory::query", "memory::store", "tool::file_write", "tool::calculate"]
+
+[[hand.settings]]
+key = "prediction_horizon"
+type = "select"
+default = "7d"
+options = ["1d", "7d", "30d", "90d"]
+
+[[hand.settings]]
+key = "confidence_threshold"
+type = "select"
+default = "0.7"
+options = ["0.5", "0.6", "0.7", "0.8", "0.9"]
+
+[[hand.settings]]
+key = "model_type"
+type = "select"
+default = "ensemble"
+options = ["linear", "moving_average", "ensemble", "seasonal"]
+
+[[hand.settings]]
+key = "alert_on_anomaly"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.2
+system_prompt = """
+Phase 1 - Data Retrieval: Query memory for all relevant time-series data within the analysis window. Group data by category and normalize timestamps to consistent intervals.
+
+Phase 2 - Statistical Analysis: Compute descriptive statistics for each series: mean, median, standard deviation, min, max, and trend direction. Identify seasonality patterns and cyclical behavior.
+
+Phase 3 - Anomaly Detection: Flag data points that deviate more than 2 standard deviations from the rolling average. Classify anomalies as spikes, drops, or structural shifts. Log each anomaly with context.
+
+Phase 4 - Model Fitting: Apply the configured model type to each data series. For ensemble mode, combine linear regression, exponential smoothing, and seasonal decomposition. Compute goodness-of-fit metrics.
+
+Phase 5 - Forecasting: Generate predictions for the configured horizon. Include confidence intervals at 80% and 95% levels. Flag predictions below the confidence threshold as uncertain.
+
+Phase 6 - Insight Generation: Translate raw predictions into actionable insights in natural language. Highlight the top 3 trends, top 3 risks, and any reversals from previous predictions.
+
+Phase 7 - Report and Alert: Store the prediction report in memory with versioning. If alert_on_anomaly is enabled, generate alerts for detected anomalies and high-confidence negative trends.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Active Predictions"
+key = "active_predictions"
+
+[[hand.dashboard.metrics]]
+label = "Accuracy (Last 30d)"
+key = "accuracy_30d"
+
+[[hand.dashboard.metrics]]
+label = "Anomalies Detected"
+key = "anomalies_detected"
+
+[[hand.dashboard.metrics]]
+label = "Avg Confidence"
+key = "avg_confidence"

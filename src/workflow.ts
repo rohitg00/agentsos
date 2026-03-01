@@ -1,0 +1,377 @@
+import { init } from "iii-sdk";
+import { requireAuth } from "./shared/utils.js";
+import { safePagination } from "./shared/validate.js";
+
+const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
+  "ws://localhost:49134",
+  { workerName: "workflow" },
+);
+
+type StepMode = "sequential" | "fanout" | "collect" | "conditional" | "loop";
+type ErrorMode = "fail" | "skip" | "retry";
+
+interface WorkflowStep {
+  name: string;
+  functionId: string;
+  promptTemplate?: string;
+  mode: StepMode;
+  timeoutMs: number;
+  errorMode: ErrorMode;
+  maxRetries?: number;
+  outputVar?: string;
+  condition?: string;
+  maxIterations?: number;
+  until?: string;
+}
+
+interface Workflow {
+  id: string;
+  name: string;
+  description: string;
+  steps: WorkflowStep[];
+}
+
+interface StepResult {
+  stepName: string;
+  output: unknown;
+  durationMs: number;
+  error?: string;
+}
+
+registerFunction(
+  {
+    id: "workflow::create",
+    description: "Register a workflow definition",
+    metadata: { category: "workflow" },
+  },
+  async (req: any) => {
+    requireAuth(req);
+    const workflow: Workflow = req.body || req;
+    const id = workflow.id || crypto.randomUUID();
+    await trigger("state::set", {
+      scope: "workflows",
+      key: id,
+      value: { ...workflow, id, createdAt: Date.now() },
+    });
+    return { id };
+  },
+);
+
+registerFunction(
+  {
+    id: "workflow::run",
+    description: "Execute a workflow",
+    metadata: { category: "workflow" },
+  },
+  async (req: any) => {
+    requireAuth(req);
+    const { workflowId, input, agentId } = req.body || req;
+    const workflow: Workflow = await trigger("state::get", {
+      scope: "workflows",
+      key: workflowId,
+    });
+
+    if (!workflow) throw new Error(`Workflow ${workflowId} not found`);
+
+    if (agentId) {
+      for (const step of workflow.steps) {
+        const cap = step.functionId.split("::")[0];
+        await trigger("security::check_capability", {
+          agentId,
+          capability: cap,
+          resource: step.functionId,
+        });
+      }
+    }
+
+    const runId = crypto.randomUUID();
+    const vars: Record<string, unknown> = { input };
+    const results: StepResult[] = [];
+
+    await trigger("state::set", {
+      scope: "workflow_runs",
+      key: runId,
+      value: { runId, workflowId, status: "running", startedAt: Date.now() },
+    });
+
+    let i = 0;
+    while (i < workflow.steps.length) {
+      const step = workflow.steps[i];
+      const startMs = Date.now();
+
+      try {
+        switch (step.mode) {
+          case "sequential": {
+            const prompt = interpolate(
+              step.promptTemplate || "{{input}}",
+              vars,
+            );
+            const output = await trigger(step.functionId, {
+              ...vars,
+              input: vars.input,
+              prompt,
+            });
+            if (step.outputVar) vars[step.outputVar] = output;
+            vars.input = output;
+            results.push({
+              stepName: step.name,
+              output,
+              durationMs: Date.now() - startMs,
+            });
+            break;
+          }
+
+          case "fanout": {
+            const fanoutSteps: WorkflowStep[] = [];
+            let j = i;
+            while (
+              j < workflow.steps.length &&
+              workflow.steps[j].mode === "fanout"
+            ) {
+              fanoutSteps.push(workflow.steps[j]);
+              j++;
+            }
+
+            const fanoutResults = await Promise.all(
+              fanoutSteps.map(async (fs) => {
+                const prompt = interpolate(
+                  fs.promptTemplate || "{{input}}",
+                  vars,
+                );
+                return trigger(fs.functionId, { ...vars, prompt });
+              }),
+            );
+
+            vars.__fanout = fanoutResults;
+            fanoutSteps.forEach((fs, idx) => {
+              if (fs.outputVar) vars[fs.outputVar] = fanoutResults[idx];
+              results.push({
+                stepName: fs.name,
+                output: fanoutResults[idx],
+                durationMs: Date.now() - startMs,
+              });
+            });
+
+            i = j - 1;
+            break;
+          }
+
+          case "collect": {
+            const prompt = interpolate(
+              step.promptTemplate || "{{__fanout}}",
+              vars,
+            );
+            const output = await trigger(step.functionId, {
+              ...vars,
+              fanoutResults: vars.__fanout,
+              prompt,
+            });
+            if (step.outputVar) vars[step.outputVar] = output;
+            vars.input = output;
+            results.push({
+              stepName: step.name,
+              output,
+              durationMs: Date.now() - startMs,
+            });
+            break;
+          }
+
+          case "conditional": {
+            const prevOutput = String(vars.input || "");
+            if (
+              step.condition &&
+              !prevOutput.toLowerCase().includes(step.condition.toLowerCase())
+            ) {
+              results.push({
+                stepName: step.name,
+                output: "skipped",
+                durationMs: Date.now() - startMs,
+              });
+              break;
+            }
+            const prompt = interpolate(
+              step.promptTemplate || "{{input}}",
+              vars,
+            );
+            const output = await trigger(step.functionId, { ...vars, prompt });
+            if (step.outputVar) vars[step.outputVar] = output;
+            vars.input = output;
+            results.push({
+              stepName: step.name,
+              output,
+              durationMs: Date.now() - startMs,
+            });
+            break;
+          }
+
+          case "loop": {
+            const max = step.maxIterations || 10;
+            let loopOutput: unknown = null;
+            for (let iter = 0; iter < max; iter++) {
+              const prompt = interpolate(
+                step.promptTemplate || "{{input}}",
+                vars,
+              );
+              loopOutput = await trigger(step.functionId, {
+                ...vars,
+                prompt,
+                iteration: iter,
+              });
+              if (step.outputVar) vars[step.outputVar] = loopOutput;
+              vars.input = loopOutput;
+
+              if (
+                step.until &&
+                String(loopOutput)
+                  .toLowerCase()
+                  .includes(step.until.toLowerCase())
+              ) {
+                break;
+              }
+            }
+            results.push({
+              stepName: step.name,
+              output: loopOutput,
+              durationMs: Date.now() - startMs,
+            });
+            break;
+          }
+        }
+      } catch (err: any) {
+        if (step.errorMode === "skip") {
+          results.push({
+            stepName: step.name,
+            output: null,
+            durationMs: Date.now() - startMs,
+            error: err.message,
+          });
+        } else if (step.errorMode === "retry") {
+          const maxRetries = step.maxRetries || 3;
+          let retried = false;
+          for (let r = 0; r < maxRetries; r++) {
+            try {
+              const prompt = interpolate(
+                step.promptTemplate || "{{input}}",
+                vars,
+              );
+              const output = await trigger(step.functionId, {
+                ...vars,
+                prompt,
+              });
+              if (step.outputVar) vars[step.outputVar] = output;
+              vars.input = output;
+              results.push({
+                stepName: step.name,
+                output,
+                durationMs: Date.now() - startMs,
+              });
+              retried = true;
+              break;
+            } catch {
+              continue;
+            }
+          }
+          if (!retried) {
+            await markRunFailed(runId, err.message, results);
+            throw err;
+          }
+        } else {
+          await markRunFailed(runId, err.message, results);
+          throw err;
+        }
+      }
+
+      i++;
+    }
+
+    await trigger("state::update", {
+      scope: "workflow_runs",
+      key: runId,
+      operations: [
+        { type: "set", path: "status", value: "completed" },
+        { type: "set", path: "completedAt", value: Date.now() },
+        { type: "set", path: "results", value: results },
+      ],
+    });
+
+    return { runId, results, vars };
+  },
+);
+
+registerFunction(
+  {
+    id: "workflow::list",
+    description: "List all workflows",
+    metadata: { category: "workflow" },
+  },
+  async (req: any) => {
+    requireAuth(req);
+    return trigger("state::list", { scope: "workflows" });
+  },
+);
+
+registerFunction(
+  {
+    id: "workflow::runs",
+    description: "List runs for a workflow",
+    metadata: { category: "workflow" },
+  },
+  async (req: any) => {
+    requireAuth(req);
+    const input = req.body || req;
+    const { workflowId } = input;
+    const { limit, offset } = safePagination(input.limit, input.offset);
+
+    const all: any[] = (await trigger("state::list", {
+      scope: "workflow_runs",
+    })) as any[];
+    const filtered = all
+      .filter((r: any) => r.value?.workflowId === workflowId)
+      .slice(offset, offset + limit);
+
+    return { runs: filtered, total: all.length, limit, offset };
+  },
+);
+
+registerTrigger({
+  type: "http",
+  function_id: "workflow::run",
+  config: { api_path: "api/workflows/run", http_method: "POST" },
+});
+
+registerTrigger({
+  type: "http",
+  function_id: "workflow::create",
+  config: { api_path: "api/workflows", http_method: "POST" },
+});
+
+registerTrigger({
+  type: "http",
+  function_id: "workflow::list",
+  config: { api_path: "api/workflows", http_method: "GET" },
+});
+
+function interpolate(template: string, vars: Record<string, unknown>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => {
+    const val = vars[key];
+    if (val === undefined) return `{{${key}}}`;
+    return typeof val === "string" ? val : JSON.stringify(val);
+  });
+}
+
+async function markRunFailed(
+  runId: string,
+  error: string,
+  results: StepResult[],
+) {
+  await trigger("state::update", {
+    scope: "workflow_runs",
+    key: runId,
+    operations: [
+      { type: "set", path: "status", value: "failed" },
+      { type: "set", path: "failedAt", value: Date.now() },
+      { type: "set", path: "error", value: error },
+      { type: "set", path: "results", value: results },
+    ],
+  });
+}

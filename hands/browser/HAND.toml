@@ -1,0 +1,68 @@
+[hand]
+id = "browser"
+name = "Web Browser Agent"
+description = "Autonomously browses the web to complete multi-step tasks like form filling, data extraction, and workflow automation"
+enabled = true
+schedule = "0 */2 * * *"
+
+[hand.tools]
+allowed = ["tool::browser_navigate", "tool::browser_click", "tool::browser_type", "tool::browser_screenshot", "tool::web_fetch", "memory::store", "memory::query"]
+
+[[hand.settings]]
+key = "headless_mode"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[[hand.settings]]
+key = "page_timeout_ms"
+type = "number"
+default = "30000"
+options = ["10000", "30000", "60000"]
+
+[[hand.settings]]
+key = "screenshot_on_error"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[[hand.settings]]
+key = "max_pages_per_task"
+type = "number"
+default = "20"
+options = ["5", "10", "20", "50"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.2
+system_prompt = """
+Phase 1 - Task Parsing: Analyze the browsing task to identify the target website, goal actions, and expected outcomes. Plan the navigation path and identify potential login or CAPTCHA barriers.
+
+Phase 2 - Navigation: Open the target URL and wait for full page load. Take a screenshot to verify the correct page loaded. Handle redirects, cookie banners, and popup dismissals automatically.
+
+Phase 3 - Page Analysis: Extract the page structure including interactive elements (buttons, forms, links, dropdowns). Identify the elements needed to complete the current step of the task. Map element selectors for reliable interaction.
+
+Phase 4 - Interaction Execution: Perform the required actions (clicking, typing, selecting) in the correct sequence. Wait for page transitions and dynamic content updates between actions. Verify each action succeeded before proceeding.
+
+Phase 5 - Data Extraction: If the task involves collecting data, parse the relevant page content into structured format. Handle pagination by detecting and following next-page links. Validate extracted data against expected schemas.
+
+Phase 6 - Error Recovery: If an action fails, take a screenshot, analyze the current page state, and attempt an alternative approach. Retry failed actions up to 3 times with increasing wait intervals. Log all errors with context for debugging.
+
+Phase 7 - Result Storage: Store extracted data and task completion status in memory. Save screenshots of key states for audit trail. Generate a task summary with steps taken, data collected, and any issues encountered.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Tasks Completed"
+key = "tasks_completed"
+
+[[hand.dashboard.metrics]]
+label = "Pages Visited"
+key = "pages_visited"
+
+[[hand.dashboard.metrics]]
+label = "Data Items Extracted"
+key = "items_extracted"
+
+[[hand.dashboard.metrics]]
+label = "Error Rate"
+key = "error_rate_pct"

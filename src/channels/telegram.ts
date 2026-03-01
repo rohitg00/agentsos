@@ -1,0 +1,72 @@
+import { init } from "iii-sdk";
+import {
+  splitMessage,
+  resolveAgent,
+  verifyTelegramUpdate,
+} from "../shared/utils.js";
+
+const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
+  "ws://localhost:49134",
+  { workerName: "channel-telegram" },
+);
+
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
+const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+
+registerFunction(
+  { id: "channel::telegram::webhook", description: "Handle Telegram webhook" },
+  async (req) => {
+    const secretToken = process.env.TELEGRAM_SECRET_TOKEN || "";
+    if (secretToken && !verifyTelegramUpdate(secretToken, req)) {
+      return { status_code: 401, body: { error: "Invalid webhook signature" } };
+    }
+
+    const update = req.body || req;
+    const message = update.message || update.edited_message;
+
+    if (!message?.text) return { status_code: 200, body: { ok: true } };
+
+    const chatId = message.chat.id;
+    const text = message.text;
+    const userId = message.from?.id;
+
+    const agentId = await resolveAgent(trigger, "telegram", String(chatId));
+
+    const response: any = await trigger("agent::chat", {
+      agentId,
+      message: text,
+      sessionId: `telegram:${chatId}`,
+    });
+
+    await sendMessage(chatId, response.content);
+
+    triggerVoid("security::audit", {
+      type: "channel_message",
+      agentId,
+      detail: { channel: "telegram", chatId, userId },
+    });
+
+    return { status_code: 200, body: { ok: true } };
+  },
+);
+
+registerTrigger({
+  type: "http",
+  function_id: "channel::telegram::webhook",
+  config: { api_path: "webhook/telegram", http_method: "POST" },
+});
+
+async function sendMessage(chatId: number, text: string) {
+  const chunks = splitMessage(text, 4096);
+  for (const chunk of chunks) {
+    await fetch(`${TELEGRAM_API}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: chunk,
+        parse_mode: "Markdown",
+      }),
+    });
+  }
+}

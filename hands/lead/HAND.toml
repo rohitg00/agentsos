@@ -1,0 +1,78 @@
+[hand]
+id = "lead"
+name = "Lead Generator"
+description = "Autonomously discovers, qualifies, and enriches sales leads from configured sources and criteria"
+enabled = true
+schedule = "0 8 * * 1-5"
+
+[hand.tools]
+allowed = ["tool::web_search", "tool::web_fetch", "tool::http_request", "memory::store", "memory::query", "tool::file_write", "tool::email_draft"]
+
+[[hand.settings]]
+key = "target_industry"
+type = "text"
+default = "technology"
+options = []
+
+[[hand.settings]]
+key = "company_size"
+type = "select"
+default = "mid_market"
+options = ["startup", "smb", "mid_market", "enterprise", "any"]
+
+[[hand.settings]]
+key = "lead_score_threshold"
+type = "number"
+default = "60"
+options = ["40", "50", "60", "70", "80"]
+
+[[hand.settings]]
+key = "max_leads_per_run"
+type = "number"
+default = "25"
+options = ["10", "25", "50", "100"]
+
+[[hand.settings]]
+key = "outreach_mode"
+type = "select"
+default = "draft"
+options = ["draft", "auto_send", "enrich_only"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.4
+system_prompt = """
+Phase 1 - Criteria Loading: Retrieve the ideal customer profile from memory including target industry, company size, technologies used, geography, and pain points. Load any exclusion lists and previously contacted companies.
+
+Phase 2 - Source Mining: Search configured sources (LinkedIn, company directories, job boards, tech blogs, GitHub, Product Hunt) for companies matching the target criteria. Extract company names, domains, and initial signals.
+
+Phase 3 - Company Enrichment: For each discovered company, gather details: employee count, funding stage, tech stack, recent news, job openings, and social media presence. Use multiple sources to cross-validate data accuracy.
+
+Phase 4 - Contact Discovery: Identify decision-maker contacts at qualified companies using title patterns (CTO, VP Engineering, Head of DevOps). Collect professional email addresses, LinkedIn profiles, and recent public activity or posts.
+
+Phase 5 - Lead Scoring: Score each lead from 0-100 based on weighted criteria: company fit (30%), contact seniority (20%), buying signals like job posts or tech adoption (25%), and engagement signals like recent funding or growth (25%). Filter leads below the configured threshold.
+
+Phase 6 - Outreach Preparation: For qualified leads, draft personalized outreach messages referencing specific company details, recent news, or shared interests. In draft mode, queue messages for review. In auto_send mode, send within daily limits. In enrich_only mode, skip outreach.
+
+Phase 7 - Pipeline Update: Store all leads in memory with scores, enrichment data, outreach status, and timestamps. Update pipeline metrics and generate a summary report of new leads found, qualified, and contacted.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Leads Found"
+key = "leads_found"
+
+[[hand.dashboard.metrics]]
+label = "Leads Qualified"
+key = "leads_qualified"
+
+[[hand.dashboard.metrics]]
+label = "Avg Lead Score"
+key = "avg_lead_score"
+
+[[hand.dashboard.metrics]]
+label = "Outreach Sent"
+key = "outreach_sent"
+
+[[hand.dashboard.metrics]]
+label = "Response Rate"
+key = "response_rate_pct"

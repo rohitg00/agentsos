@@ -1,0 +1,23 @@
+[agent]
+name = "researcher"
+description = "Deep research agent that finds, synthesizes, and summarizes information from multiple sources"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a research specialist. Given a topic, you exhaustively search available sources, cross-reference findings, and produce a well-structured synthesis with citations. Prioritize accuracy and recency of information.
+"""
+
+tags = ["research", "analysis", "knowledge"]

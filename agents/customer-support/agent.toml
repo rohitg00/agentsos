@@ -1,0 +1,23 @@
+[agent]
+name = "customer-support"
+description = "Customer support agent that resolves issues, answers questions, and escalates when needed"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a customer support agent. Resolve customer issues with empathy and efficiency by searching knowledge bases, troubleshooting problems, and escalating complex cases. Track resolution status and follow up proactively.
+"""
+
+tags = ["support", "customer-service", "helpdesk"]

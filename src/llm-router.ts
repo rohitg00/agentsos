@@ -1,0 +1,402 @@
+import { init } from "iii-sdk";
+import Anthropic from "@anthropic-ai/sdk";
+
+const { registerFunction, trigger, triggerVoid } = init(
+  "ws://localhost:49134",
+  { workerName: "llm-router" },
+);
+
+interface ModelSelection {
+  provider: string;
+  model: string;
+  maxTokens: number;
+}
+
+interface CompleteRequest {
+  model: ModelSelection;
+  systemPrompt?: string;
+  messages: Array<{ role: string; content: string }>;
+  tools?: Array<{ id: string; description?: string }>;
+  toolResults?: Array<{ toolCallId: string; output: unknown }>;
+}
+
+const PROVIDER_CONFIGS: Record<string, { baseUrl: string; envKey: string }> = {
+  openai: { baseUrl: "https://api.openai.com/v1", envKey: "OPENAI_API_KEY" },
+  deepseek: {
+    baseUrl: "https://api.deepseek.com/v1",
+    envKey: "DEEPSEEK_API_KEY",
+  },
+  groq: { baseUrl: "https://api.groq.com/openai/v1", envKey: "GROQ_API_KEY" },
+  openrouter: {
+    baseUrl: "https://openrouter.ai/api/v1",
+    envKey: "OPENROUTER_API_KEY",
+  },
+  mistral: { baseUrl: "https://api.mistral.ai/v1", envKey: "MISTRAL_API_KEY" },
+  together: {
+    baseUrl: "https://api.together.xyz/v1",
+    envKey: "TOGETHER_API_KEY",
+  },
+  fireworks: {
+    baseUrl: "https://api.fireworks.ai/inference/v1",
+    envKey: "FIREWORKS_API_KEY",
+  },
+  ollama: { baseUrl: "http://localhost:11434/v1", envKey: "OLLAMA_API_KEY" },
+  vllm: { baseUrl: "http://localhost:8000/v1", envKey: "VLLM_API_KEY" },
+  lmstudio: { baseUrl: "http://localhost:1234/v1", envKey: "LMSTUDIO_API_KEY" },
+  perplexity: {
+    baseUrl: "https://api.perplexity.ai",
+    envKey: "PERPLEXITY_API_KEY",
+  },
+  cohere: { baseUrl: "https://api.cohere.ai/v1", envKey: "COHERE_API_KEY" },
+  ai21: { baseUrl: "https://api.ai21.com/studio/v1", envKey: "AI21_API_KEY" },
+  cerebras: {
+    baseUrl: "https://api.cerebras.ai/v1",
+    envKey: "CEREBRAS_API_KEY",
+  },
+  sambanova: {
+    baseUrl: "https://api.sambanova.ai/v1",
+    envKey: "SAMBANOVA_API_KEY",
+  },
+  huggingface: {
+    baseUrl: "https://api-inference.huggingface.co",
+    envKey: "HF_API_KEY",
+  },
+  xai: { baseUrl: "https://api.x.ai/v1", envKey: "XAI_API_KEY" },
+  replicate: {
+    baseUrl: "https://api.replicate.com/v1",
+    envKey: "REPLICATE_API_TOKEN",
+  },
+  github_copilot: {
+    baseUrl: "https://api.githubcopilot.com",
+    envKey: "GITHUB_TOKEN",
+  },
+  qwen: {
+    baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    envKey: "DASHSCOPE_API_KEY",
+  },
+  minimax: {
+    baseUrl: "https://api.minimax.chat/v1",
+    envKey: "MINIMAX_API_KEY",
+  },
+  zhipu: {
+    baseUrl: "https://open.bigmodel.cn/api/paas/v4",
+    envKey: "ZHIPU_API_KEY",
+  },
+  moonshot: {
+    baseUrl: "https://api.moonshot.cn/v1",
+    envKey: "MOONSHOT_API_KEY",
+  },
+  baidu: {
+    baseUrl: "https://aip.baidubce.com/rpc/2.0",
+    envKey: "QIANFAN_API_KEY",
+  },
+};
+
+const PROVIDERS: Record<string, (req: CompleteRequest) => Promise<any>> = {
+  anthropic: callAnthropic,
+  bedrock: callAnthropic,
+  ...Object.fromEntries(
+    Object.keys(PROVIDER_CONFIGS).map((id) => [
+      id,
+      (req: CompleteRequest) => callOpenAICompat(req, id),
+    ]),
+  ),
+};
+
+const PRICING: Record<string, { input: number; output: number }> = {
+  "claude-opus-4-6": { input: 15, output: 75 },
+  "claude-sonnet-4-6": { input: 3, output: 15 },
+  "claude-haiku-4-5": { input: 0.8, output: 4 },
+  "gpt-4o": { input: 2.5, output: 10 },
+  "gpt-4.1": { input: 2, output: 8 },
+  o3: { input: 10, output: 40 },
+  "o4-mini": { input: 1.1, output: 4.4 },
+  "gpt-4o-mini": { input: 0.15, output: 0.6 },
+  "gemini-2.5-flash": { input: 0.15, output: 0.6 },
+  "gemini-2.5-pro": { input: 1.25, output: 10 },
+  "deepseek-chat": { input: 0.14, output: 0.28 },
+  "deepseek-reasoner": { input: 0.55, output: 2.19 },
+  "llama-3.3-70b": { input: 0.59, output: 0.79 },
+  "grok-2": { input: 2, output: 10 },
+  "grok-3": { input: 3, output: 15 },
+  "grok-3-mini": { input: 0.3, output: 0.5 },
+  "mistral-large": { input: 2, output: 6 },
+  "sonar-pro": { input: 3, output: 15 },
+  sonar: { input: 1, output: 1 },
+  "command-a": { input: 2.5, output: 10 },
+  "command-r-plus": { input: 3, output: 15 },
+  "command-r": { input: 0.5, output: 1.5 },
+  "jamba-1.5-large": { input: 2, output: 8 },
+  "jamba-1.5-mini": { input: 0.2, output: 0.4 },
+  "cerebras-llama-3.3-70b": { input: 0.6, output: 0.6 },
+  "samba-llama-3.1-405b": { input: 5, output: 10 },
+  "samba-llama-3.3-70b": { input: 0.6, output: 0.6 },
+  "hf-llama-3.3-70b": { input: 0.36, output: 0.36 },
+  "hf-mistral-7b": { input: 0, output: 0 },
+  "replicate-llama-3.3-70b": { input: 0.65, output: 2.75 },
+  "qwen-max": { input: 2.4, output: 9.6 },
+  "qwen-plus": { input: 0.5, output: 1.5 },
+  "qwen-turbo": { input: 0.05, output: 0.15 },
+  "abab7-chat": { input: 1, output: 1 },
+  "glm-4-plus": { input: 7, output: 7 },
+  "glm-4": { input: 1.4, output: 1.4 },
+  "moonshot-v1-128k": { input: 8.5, output: 8.5 },
+  "moonshot-v1-32k": { input: 3.3, output: 3.3 },
+  "ernie-4.0-turbo": { input: 4.2, output: 8.4 },
+  "ernie-3.5-turbo": { input: 0.56, output: 1.12 },
+  "bedrock-claude-sonnet": { input: 3, output: 15 },
+  "bedrock-nova-pro": { input: 0.8, output: 3.2 },
+  "bedrock-llama-3.3-70b": { input: 0.72, output: 0.72 },
+  "copilot-gpt-4o": { input: 2.5, output: 10 },
+  "together-llama-3.3-70b": { input: 0.88, output: 0.88 },
+  "fireworks-llama-3.3-70b": { input: 0.9, output: 0.9 },
+};
+
+registerFunction(
+  { id: "llm::route", description: "Select optimal model by query complexity" },
+  async ({ message, toolCount, config }): Promise<ModelSelection> => {
+    if (config?.model) {
+      return {
+        provider: config.provider || "anthropic",
+        model: config.model,
+        maxTokens: config.maxTokens || 4096,
+      };
+    }
+
+    const score = scoreComplexity(message, toolCount || 0);
+
+    if (score < 0.3) {
+      return {
+        provider: "anthropic",
+        model: "claude-haiku-4-5",
+        maxTokens: 2048,
+      };
+    }
+    if (score < 0.7) {
+      return {
+        provider: "anthropic",
+        model: "claude-sonnet-4-6",
+        maxTokens: 4096,
+      };
+    }
+    return { provider: "anthropic", model: "claude-opus-4-6", maxTokens: 8192 };
+  },
+);
+
+registerFunction(
+  {
+    id: "llm::complete",
+    description: "Call LLM with automatic fallback and cost tracking",
+  },
+  async (req: CompleteRequest) => {
+    const { provider } = req.model;
+    const callProvider = PROVIDERS[provider];
+    if (!callProvider) throw new Error(`Unknown provider: ${provider}`);
+
+    const startMs = Date.now();
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const result = await callProvider(req);
+        const durationMs = Date.now() - startMs;
+
+        const pricing = PRICING[req.model.model];
+        if (pricing && result.usage) {
+          const cost =
+            (result.usage.input * pricing.input) / 1_000_000 +
+            (result.usage.output * pricing.output) / 1_000_000;
+
+          triggerVoid("state::update", {
+            scope: "costs",
+            key: new Date().toISOString().slice(0, 10),
+            operations: [
+              {
+                type: "increment",
+                path: `${req.model.model}.cost`,
+                value: cost,
+              },
+              { type: "increment", path: `${req.model.model}.calls`, value: 1 },
+              { type: "increment", path: "totalCost", value: cost },
+            ],
+          });
+        }
+
+        return { ...result, durationMs };
+      } catch (err: any) {
+        lastError = err;
+        if (err.status === 429) {
+          await sleep(Math.pow(2, attempt) * 1000);
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    throw lastError;
+  },
+);
+
+async function callAnthropic(req: CompleteRequest) {
+  const client = new Anthropic();
+
+  const tools = req.tools?.map((t) => ({
+    name: t.id.replace(/::/g, "_"),
+    description: t.description || t.id,
+    input_schema: { type: "object" as const, properties: {} },
+  }));
+
+  const messages = req.messages
+    .filter((m) => m.role !== "system")
+    .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
+  if (req.toolResults?.length) {
+    for (const tr of req.toolResults) {
+      messages.push({
+        role: "user",
+        content: JSON.stringify({
+          tool_use_id: tr.toolCallId,
+          output: tr.output,
+        }),
+      });
+    }
+  }
+
+  const response = await client.messages.create({
+    model: req.model.model,
+    max_tokens: req.model.maxTokens,
+    system: req.systemPrompt || "",
+    messages,
+    ...(tools?.length ? { tools } : {}),
+  });
+
+  const textBlock = response.content.find((b) => b.type === "text");
+  const toolBlocks = response.content.filter((b) => b.type === "tool_use");
+
+  return {
+    content: textBlock ? (textBlock as any).text : "",
+    model: response.model,
+    toolCalls: toolBlocks.map((b: any) => ({
+      callId: b.id,
+      id: b.name.replace(/_/g, "::"),
+      arguments: b.input,
+    })),
+    usage: {
+      input: response.usage.input_tokens,
+      output: response.usage.output_tokens,
+      total: response.usage.input_tokens + response.usage.output_tokens,
+    },
+  };
+}
+
+async function callOpenAICompat(req: CompleteRequest, providerId: string) {
+  const config = PROVIDER_CONFIGS[providerId];
+  if (!config) throw new Error(`No config for provider: ${providerId}`);
+
+  const apiKey = process.env[config.envKey] || "";
+
+  const messages: Array<{ role: string; content: string }> = [];
+  if (req.systemPrompt) {
+    messages.push({ role: "system", content: req.systemPrompt });
+  }
+  for (const m of req.messages) {
+    messages.push({ role: m.role, content: m.content });
+  }
+  if (req.toolResults?.length) {
+    for (const tr of req.toolResults) {
+      messages.push({
+        role: "user",
+        content: JSON.stringify({
+          tool_call_id: tr.toolCallId,
+          output: tr.output,
+        }),
+      });
+    }
+  }
+
+  const body: Record<string, unknown> = {
+    model: req.model.model,
+    max_tokens: req.model.maxTokens,
+    messages,
+  };
+
+  if (req.tools?.length) {
+    body.tools = req.tools.map((t) => ({
+      type: "function",
+      function: {
+        name: t.id.replace(/::/g, "_"),
+        description: t.description || t.id,
+        parameters: { type: "object", properties: {} },
+      },
+    }));
+  }
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (apiKey) {
+    headers["Authorization"] = `Bearer ${apiKey}`;
+  }
+
+  const url = `${config.baseUrl}/chat/completions`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(120_000),
+  });
+
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => "");
+    const err: any = new Error(
+      `${providerId} API error ${resp.status}: ${text.slice(0, 500)}`,
+    );
+    err.status = resp.status;
+    throw err;
+  }
+
+  const data: any = await resp.json();
+  const choice = data.choices?.[0];
+  const message = choice?.message;
+
+  const toolCalls = (message?.tool_calls || []).map((tc: any) => ({
+    callId: tc.id,
+    id: (tc.function?.name || "").replace(/_/g, "::"),
+    arguments: JSON.parse(tc.function?.arguments || "{}"),
+  }));
+
+  return {
+    content: message?.content || "",
+    model: data.model || req.model.model,
+    toolCalls,
+    usage: {
+      input: data.usage?.prompt_tokens || 0,
+      output: data.usage?.completion_tokens || 0,
+      total: data.usage?.total_tokens || 0,
+    },
+  };
+}
+
+function scoreComplexity(message: string, toolCount: number): number {
+  let score = 0;
+  const len = message.length;
+
+  if (len > 2000) score += 0.3;
+  else if (len > 500) score += 0.15;
+  else if (len < 50) score -= 0.1;
+
+  if (/```[\s\S]*```/.test(message)) score += 0.2;
+  if (/\b(analyze|architect|design|implement|refactor|debug)\b/i.test(message))
+    score += 0.15;
+  if (/\b(hi|hello|thanks|yes|no|ok)\b/i.test(message) && len < 30)
+    score -= 0.2;
+
+  if (toolCount > 10) score += 0.2;
+  else if (toolCount > 3) score += 0.1;
+
+  return Math.max(0, Math.min(1, score + 0.4));
+}
+
+function sleep(ms: number) {
+  return new Promise((r) => setTimeout(r, ms));
+}

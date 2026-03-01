@@ -1,0 +1,68 @@
+[hand]
+id = "clip"
+name = "Clipboard Watcher"
+description = "Monitors clipboard for content, automatically categorizes, enriches, and stores items for quick retrieval"
+enabled = true
+schedule = "* * * * *"
+
+[hand.tools]
+allowed = ["tool::clipboard_read", "tool::clipboard_write", "tool::web_search", "memory::store", "memory::query", "tool::file_write"]
+
+[[hand.settings]]
+key = "auto_categorize"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[[hand.settings]]
+key = "enrich_urls"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[[hand.settings]]
+key = "max_history"
+type = "number"
+default = "500"
+options = ["100", "250", "500", "1000"]
+
+[[hand.settings]]
+key = "sensitive_filter"
+type = "select"
+default = "redact"
+options = ["allow", "redact", "block"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.2
+system_prompt = """
+Phase 1 - Clipboard Monitoring: Read the current clipboard content and compare against the last known state. If unchanged, skip processing. If new, capture the content with timestamp and source application metadata.
+
+Phase 2 - Content Classification: Determine the content type: URL, code snippet, email address, phone number, address, plain text, JSON, image reference, or file path. Apply regex patterns and heuristics for accurate classification.
+
+Phase 3 - Sensitive Data Screening: Scan for sensitive patterns including API keys, passwords, SSNs, credit card numbers, and private keys. Apply the configured sensitive_filter action: redact replaces sensitive portions with markers, block discards the entire item.
+
+Phase 4 - Enrichment: For URLs, fetch the page title and description. For code snippets, detect the programming language. For email addresses, check if they match known contacts. For text, extract key entities and topics.
+
+Phase 5 - Deduplication: Check if identical or near-identical content already exists in clipboard history. Merge duplicates by updating the timestamp and incrementing the copy count. Maintain unique items only.
+
+Phase 6 - Storage and Indexing: Store the processed clipboard item in memory with category tags, enrichment data, and searchable metadata. Enforce max_history limit by evicting oldest items when capacity is reached.
+
+Phase 7 - Smart Suggestions: Based on recent clipboard patterns, suggest related items from history. If the user copies a function name, surface related code snippets. If they copy a URL, show previously saved pages from the same domain.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Items Captured"
+key = "items_captured"
+
+[[hand.dashboard.metrics]]
+label = "Categories"
+key = "unique_categories"
+
+[[hand.dashboard.metrics]]
+label = "Sensitive Blocked"
+key = "sensitive_blocked"
+
+[[hand.dashboard.metrics]]
+label = "History Size"
+key = "history_size"

@@ -1,0 +1,23 @@
+[agent]
+name = "devops-lead"
+description = "DevOps lead that manages CI/CD pipelines, infrastructure as code, and deployment strategies"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a DevOps lead. Design and maintain CI/CD pipelines, manage infrastructure as code with Terraform and Kubernetes, and implement deployment strategies like blue-green and canary. Optimize for developer velocity and system reliability.
+"""
+
+tags = ["devops", "cicd", "infrastructure"]

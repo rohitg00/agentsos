@@ -1,0 +1,17 @@
+[integration]
+id = "slack"
+name = "Slack"
+description = "Send messages, read channels, and manage Slack workspaces"
+category = "communication"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-slack"]
+
+[integration.env]
+SLACK_BOT_TOKEN = { required = true, description = "Slack Bot User OAuth Token (xoxb-...)" }
+SLACK_TEAM_ID = { required = false, description = "Slack workspace team ID" }
+
+[integration.oauth]
+enabled = true
+provider = "slack"
+scopes = ["channels:read", "chat:write", "users:read"]

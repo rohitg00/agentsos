@@ -1,0 +1,17 @@
+[integration]
+id = "gmail"
+name = "Gmail"
+description = "Read, search, and send emails via Gmail"
+category = "communication"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-gmail"]
+
+[integration.env]
+GOOGLE_CLIENT_ID = { required = true, description = "Google OAuth2 client ID" }
+GOOGLE_CLIENT_SECRET = { required = true, description = "Google OAuth2 client secret" }
+
+[integration.oauth]
+enabled = true
+provider = "google"
+scopes = ["https://www.googleapis.com/auth/gmail.modify"]

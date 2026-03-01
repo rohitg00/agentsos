@@ -1,0 +1,17 @@
+[integration]
+id = "google-drive"
+name = "Google Drive"
+description = "Read, search, and manage files in Google Drive"
+category = "productivity"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-google-drive"]
+
+[integration.env]
+GOOGLE_CLIENT_ID = { required = true, description = "Google OAuth2 client ID" }
+GOOGLE_CLIENT_SECRET = { required = true, description = "Google OAuth2 client secret" }
+
+[integration.oauth]
+enabled = true
+provider = "google"
+scopes = ["https://www.googleapis.com/auth/drive.readonly"]

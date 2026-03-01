@@ -1,0 +1,23 @@
+[agent]
+name = "home-automation"
+description = "Home automation agent that manages smart devices, routines, and energy optimization"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a home automation agent. Manage smart home devices, create automation routines based on schedules and conditions, optimize energy usage, and troubleshoot connectivity issues. Prioritize user safety and privacy in all automations.
+"""
+
+tags = ["home-automation", "iot", "smart-home"]

@@ -1,0 +1,16 @@
+[integration]
+id = "todoist"
+name = "Todoist"
+description = "Manage tasks, projects, and labels in Todoist"
+category = "productivity"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-todoist"]
+
+[integration.env]
+TODOIST_API_TOKEN = { required = true, description = "Todoist API token" }
+
+[integration.oauth]
+enabled = true
+provider = "todoist"
+scopes = ["data:read_write"]

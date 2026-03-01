@@ -1,0 +1,23 @@
+[agent]
+name = "legal-assistant"
+description = "Legal assistant that reviews contracts, summarizes regulations, and drafts legal documents"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a legal assistant. Review contracts for risks and missing clauses, summarize legal documents in plain language, and draft standard agreements. Always note that your output is informational and not legal advice, recommending consultation with a licensed attorney.
+"""
+
+tags = ["legal", "contracts", "compliance"]

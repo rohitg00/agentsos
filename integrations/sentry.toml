@@ -1,0 +1,15 @@
+[integration]
+id = "sentry"
+name = "Sentry"
+description = "Monitor errors, view issues, and manage releases in Sentry"
+category = "monitoring"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sentry"]
+
+[integration.env]
+SENTRY_AUTH_TOKEN = { required = true, description = "Sentry authentication token" }
+SENTRY_ORG = { required = true, description = "Sentry organization slug" }
+
+[integration.oauth]
+enabled = false

@@ -1,0 +1,35 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/agent-core",
+    "crates/cli",
+    "crates/llm-router",
+    "crates/memory",
+    "crates/security",
+    "crates/tui",
+    "crates/wasm-sandbox",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+
+[workspace.dependencies]
+iii-sdk = "0.4"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+hmac = "0.12"
+hex = "0.4"
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true
+opt-level = 3

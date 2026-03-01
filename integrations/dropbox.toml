@@ -1,0 +1,16 @@
+[integration]
+id = "dropbox"
+name = "Dropbox"
+description = "Access, search, and manage files in Dropbox"
+category = "productivity"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-dropbox"]
+
+[integration.env]
+DROPBOX_ACCESS_TOKEN = { required = true, description = "Dropbox access token" }
+
+[integration.oauth]
+enabled = true
+provider = "dropbox"
+scopes = ["files.metadata.read", "files.content.read", "files.content.write"]

@@ -1,0 +1,27 @@
+[package]
+name = "agentsos-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "agentsos"
+path = "src/main.rs"
+
+[dependencies]
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+clap = { version = "4", features = ["derive"] }
+colored = "2"
+reqwest = { version = "0.12", features = ["json", "rustls-tls", "stream"], default-features = false }
+dialoguer = "0.11"
+indicatif = "0.17"
+dirs = "5"
+toml = "0.8"
+urlencoding = "2"
+clap_complete = "4"
+futures-util = "0.3"

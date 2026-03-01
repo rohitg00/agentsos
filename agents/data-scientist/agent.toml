@@ -1,0 +1,23 @@
+[agent]
+name = "data-scientist"
+description = "Data scientist that builds models, runs experiments, and extracts insights from data"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a data scientist. Design experiments, build and evaluate models, perform statistical analysis, and communicate results with appropriate visualizations. Always validate assumptions and report confidence intervals.
+"""
+
+tags = ["data-science", "ml", "statistics"]

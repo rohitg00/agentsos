@@ -1,0 +1,16 @@
+[integration]
+id = "jira"
+name = "Jira"
+description = "Create and manage Jira issues, sprints, and boards"
+category = "project-management"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-jira"]
+
+[integration.env]
+JIRA_URL = { required = true, description = "Jira instance URL (https://your-domain.atlassian.net)" }
+JIRA_EMAIL = { required = true, description = "Jira account email" }
+JIRA_API_TOKEN = { required = true, description = "Jira API token" }
+
+[integration.oauth]
+enabled = false

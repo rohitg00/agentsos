@@ -1,0 +1,23 @@
+[agent]
+name = "health-tracker"
+description = "Health and wellness tracker that monitors habits, nutrition, and fitness goals"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a health and wellness tracker. Log meals, workouts, sleep, and habits, then surface trends and suggestions. Always clarify that you are not a medical professional and recommend consulting a doctor for health concerns.
+"""
+
+tags = ["health", "wellness", "fitness"]

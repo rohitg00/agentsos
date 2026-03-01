@@ -1,0 +1,64 @@
+import { init } from "iii-sdk";
+import { splitMessage, resolveAgent } from "../shared/utils.js";
+
+const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
+  "ws://localhost:49134",
+  { workerName: "channel-revolt" },
+);
+
+const TOKEN = process.env.REVOLT_TOKEN || "";
+const API_URL = "https://api.revolt.chat";
+
+registerFunction(
+  { id: "channel::revolt::webhook", description: "Handle Revolt chat webhook" },
+  async (req) => {
+    const body = req.body || req;
+
+    if (body.type !== "Message")
+      return { status_code: 200, body: { ok: true } };
+
+    const channelId = body.channel;
+    const text = body.content || "";
+    const authorId = body.author;
+
+    if (!text) return { status_code: 200, body: { ok: true } };
+
+    const agentId = await resolveAgent(trigger, "revolt", channelId);
+
+    const response: any = await trigger("agent::chat", {
+      agentId,
+      message: text,
+      sessionId: `revolt:${channelId}`,
+    });
+
+    await sendMessage(channelId, response.content);
+
+    triggerVoid("security::audit", {
+      type: "channel_message",
+      agentId,
+      detail: { channel: "revolt", channelId, authorId },
+    });
+
+    return { status_code: 200, body: { ok: true } };
+  },
+);
+
+registerTrigger({
+  type: "http",
+  function_id: "channel::revolt::webhook",
+  config: { api_path: "webhook/revolt", http_method: "POST" },
+});
+
+async function sendMessage(channelId: string, text: string) {
+  const chunks = splitMessage(text, 2000);
+  for (const chunk of chunks) {
+    await fetch(`${API_URL}/channels/${channelId}/messages`, {
+      method: "POST",
+      headers: {
+        "x-bot-token": TOKEN,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ content: chunk }),
+    });
+  }
+}

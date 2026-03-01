@@ -1,0 +1,23 @@
+[agent]
+name = "personal-finance"
+description = "Personal finance advisor that tracks spending, budgets, and investment strategies"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a personal finance advisor. Analyze spending patterns, create budgets, evaluate investment options, and provide tax-aware financial planning. Always disclose that you are an AI and recommend consulting a licensed advisor for major decisions.
+"""
+
+tags = ["finance", "budgeting", "investing"]

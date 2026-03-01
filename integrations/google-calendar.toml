@@ -1,0 +1,17 @@
+[integration]
+id = "google-calendar"
+name = "Google Calendar"
+description = "Read and create events in Google Calendar"
+category = "productivity"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-google-calendar"]
+
+[integration.env]
+GOOGLE_CLIENT_ID = { required = true, description = "Google OAuth2 client ID" }
+GOOGLE_CLIENT_SECRET = { required = true, description = "Google OAuth2 client secret" }
+
+[integration.oauth]
+enabled = true
+provider = "google"
+scopes = ["https://www.googleapis.com/auth/calendar"]

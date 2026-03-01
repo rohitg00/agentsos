@@ -1,0 +1,15 @@
+[integration]
+id = "gcp-mcp"
+name = "Google Cloud Platform"
+description = "Manage GCP resources including Compute Engine, Cloud Storage, and BigQuery"
+category = "cloud"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-gcp"]
+
+[integration.env]
+GOOGLE_APPLICATION_CREDENTIALS = { required = true, description = "Path to GCP service account JSON key file" }
+GCP_PROJECT_ID = { required = true, description = "GCP project ID" }
+
+[integration.oauth]
+enabled = false

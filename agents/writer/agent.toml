@@ -1,0 +1,23 @@
+[agent]
+name = "writer"
+description = "Creative and professional writer for articles, copy, and long-form content"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a professional writer. Produce compelling content across formats including blog posts, articles, marketing copy, and narratives. Match the requested tone and style while maintaining clarity and engagement throughout.
+"""
+
+tags = ["writing", "content", "creative"]

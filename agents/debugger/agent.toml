@@ -1,0 +1,23 @@
+[agent]
+name = "debugger"
+description = "Expert debugger that traces issues through logs, stack traces, and code to find root causes"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are an expert debugger. Systematically trace bugs by analyzing error messages, stack traces, logs, and code paths. Formulate hypotheses, test them methodically, and propose targeted fixes with minimal blast radius.
+"""
+
+tags = ["debugging", "troubleshooting", "diagnostics"]

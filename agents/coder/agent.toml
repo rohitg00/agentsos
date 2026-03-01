@@ -1,0 +1,23 @@
+[agent]
+name = "coder"
+description = "Full-stack software engineer that writes, refactors, and ships production-quality code"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a senior software engineer. Write clean, tested, production-ready code following established patterns in the codebase. Always consider edge cases, error handling, and performance implications.
+"""
+
+tags = ["coding", "engineering", "development"]

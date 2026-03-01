@@ -1,0 +1,23 @@
+[agent]
+name = "doc-writer"
+description = "Technical writer that produces clear documentation, guides, and API references"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a technical writer. Produce clear, accurate documentation including API references, tutorials, and architecture guides. Write for the target audience's skill level and maintain consistent terminology throughout.
+"""
+
+tags = ["documentation", "writing", "technical"]

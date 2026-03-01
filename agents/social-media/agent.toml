@@ -1,0 +1,23 @@
+[agent]
+name = "social-media"
+description = "Social media manager that creates content, schedules posts, and analyzes engagement"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a social media manager. Create platform-specific content optimized for engagement, schedule posts at optimal times, analyze performance metrics, and adjust strategy based on audience response patterns.
+"""
+
+tags = ["social-media", "content", "marketing"]

@@ -1,0 +1,78 @@
+[hand]
+id = "collector"
+name = "Data Collector"
+description = "Autonomously collects, normalizes, and stores data from configured sources on a schedule"
+enabled = true
+schedule = "*/30 * * * *"
+
+[hand.tools]
+allowed = ["tool::web_fetch", "tool::http_request", "tool::file_write", "tool::file_read", "memory::store"]
+
+[[hand.settings]]
+key = "collection_mode"
+type = "select"
+default = "incremental"
+options = ["full", "incremental", "diff"]
+
+[[hand.settings]]
+key = "dedup_strategy"
+type = "select"
+default = "content_hash"
+options = ["content_hash", "url", "title", "none"]
+
+[[hand.settings]]
+key = "retention_days"
+type = "number"
+default = "30"
+options = ["7", "14", "30", "90", "365"]
+
+[[hand.settings]]
+key = "max_items_per_run"
+type = "number"
+default = "100"
+options = ["25", "50", "100", "500"]
+
+[[hand.settings]]
+key = "error_handling"
+type = "select"
+default = "skip_and_log"
+options = ["skip_and_log", "retry_3x", "abort_on_error"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.2
+system_prompt = """
+Phase 1 - Source Inventory: Load the list of configured data sources from memory. Check each source's last collection timestamp and determine which need fetching based on the schedule.
+
+Phase 2 - Data Fetching: Connect to each due source via its configured protocol (HTTP, API, RSS). Handle pagination, rate limits, and authentication. Respect robots.txt and API quotas.
+
+Phase 3 - Normalization: Transform raw data into a consistent schema with fields for id, title, content, source, timestamp, and metadata. Handle encoding issues and malformed data gracefully.
+
+Phase 4 - Deduplication: Apply the configured dedup strategy to filter out items already in storage. Log duplicate counts for monitoring.
+
+Phase 5 - Validation: Check each item against quality rules: required fields present, content length within bounds, timestamps valid, no corrupted data. Quarantine invalid items.
+
+Phase 6 - Storage: Write validated items to memory with source tags and collection metadata. Update the last-collected timestamp for each source. Enforce retention policy by purging items older than retention_days.
+
+Phase 7 - Reporting: Generate a collection summary with items collected, duplicates skipped, errors encountered, and source health status. Alert if any source has failed 3+ consecutive times.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Items Collected"
+key = "items_collected"
+
+[[hand.dashboard.metrics]]
+label = "Duplicates Skipped"
+key = "duplicates_skipped"
+
+[[hand.dashboard.metrics]]
+label = "Source Health"
+key = "source_health_pct"
+
+[[hand.dashboard.metrics]]
+label = "Storage Used"
+key = "storage_bytes"
+
+[[hand.dashboard.metrics]]
+label = "Collection Errors"
+key = "error_count"

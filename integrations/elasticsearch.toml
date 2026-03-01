@@ -1,0 +1,17 @@
+[integration]
+id = "elasticsearch"
+name = "Elasticsearch"
+description = "Search, index, and manage Elasticsearch clusters and indices"
+category = "database"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-elasticsearch"]
+
+[integration.env]
+ELASTICSEARCH_URL = { required = true, description = "Elasticsearch cluster URL (https://host:9200)" }
+ELASTICSEARCH_API_KEY = { required = false, description = "Elasticsearch API key for authentication" }
+ELASTICSEARCH_USERNAME = { required = false, description = "Elasticsearch username for basic auth" }
+ELASTICSEARCH_PASSWORD = { required = false, description = "Elasticsearch password for basic auth" }
+
+[integration.oauth]
+enabled = false

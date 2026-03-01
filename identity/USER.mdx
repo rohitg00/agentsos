@@ -1,0 +1,58 @@
+# User Information Template
+
+## Profile
+
+**Name**: {{USER_NAME}}
+**Email**: {{USER_EMAIL}}
+**GitHub**: {{GITHUB_USERNAME}}
+**Timezone**: {{TIMEZONE}}
+**Locale**: {{LOCALE}}
+
+## Preferences
+
+### Communication
+- **Response Length**: {{RESPONSE_LENGTH}} (concise | standard | detailed)
+- **Technical Level**: {{TECH_LEVEL}} (beginner | intermediate | expert)
+- **Tone**: {{PREFERRED_TONE}} (formal | casual | technical)
+- **Language**: {{LANGUAGE}} (en, es, fr, de, ja, etc.)
+
+### Workflow
+- **Approval Mode**: {{APPROVAL_MODE}} (always_ask | auto_safe | auto_all)
+- **Auto-Commit**: {{AUTO_COMMIT}} (never | on_request | always)
+- **Branch Strategy**: {{BRANCH_STRATEGY}} (feature_branch | trunk | gitflow)
+- **Default Agent**: {{DEFAULT_AGENT}} (assistant, coder, researcher, etc.)
+
+### Notifications
+- **Notify On**: {{NOTIFY_EVENTS}} (errors | completions | approvals | all)
+- **Channel**: {{NOTIFY_CHANNEL}} (terminal | slack | email | webhook)
+
+## Context
+
+### Active Projects
+- **Primary Project**: {{PROJECT_PATH}}
+- **Language/Framework**: {{PRIMARY_STACK}}
+- **Repository**: {{REPO_URL}}
+
+### Environment
+- **OS**: {{OS_TYPE}}
+- **Shell**: {{SHELL}}
+- **Editor**: {{EDITOR}}
+- **Package Manager**: {{PKG_MANAGER}}
+
+### APIs and Services
+- **Cloud Provider**: {{CLOUD_PROVIDER}}
+- **CI/CD**: {{CICD_PLATFORM}}
+- **Monitoring**: {{MONITORING_TOOL}}
+
+## Custom Instructions
+
+{{CUSTOM_INSTRUCTIONS}}
+
+These instructions are appended to every agent's system prompt when interacting with this user. Use them to encode persistent preferences that apply across all agents.
+
+## History
+
+- **First Session**: {{FIRST_SESSION_DATE}}
+- **Total Sessions**: {{SESSION_COUNT}}
+- **Most Used Agent**: {{MOST_USED_AGENT}}
+- **Total Tokens**: {{LIFETIME_TOKENS}}

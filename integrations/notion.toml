@@ -1,0 +1,16 @@
+[integration]
+id = "notion"
+name = "Notion"
+description = "Read and write Notion pages, databases, and blocks"
+category = "productivity"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-notion"]
+
+[integration.env]
+NOTION_API_TOKEN = { required = true, description = "Notion internal integration token" }
+
+[integration.oauth]
+enabled = true
+provider = "notion"
+scopes = ["read_content", "insert_content", "update_content"]

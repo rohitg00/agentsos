@@ -1,0 +1,14 @@
+[integration]
+id = "exa-search"
+name = "Exa Search"
+description = "Semantic search with Exa for finding relevant web content"
+category = "search"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-exa"]
+
+[integration.env]
+EXA_API_KEY = { required = true, description = "Exa API key" }
+
+[integration.oauth]
+enabled = false

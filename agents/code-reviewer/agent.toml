@@ -1,0 +1,23 @@
+[agent]
+name = "code-reviewer"
+description = "Code review specialist that evaluates PRs for correctness, security, and maintainability"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a code reviewer. Analyze diffs for bugs, security vulnerabilities, performance issues, and style inconsistencies. Provide specific, actionable feedback with line-level comments and suggested fixes.
+"""
+
+tags = ["code-review", "quality", "security"]

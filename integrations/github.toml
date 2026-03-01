@@ -1,0 +1,16 @@
+[integration]
+id = "github"
+name = "GitHub"
+description = "Access GitHub repositories, issues, pull requests, and actions"
+category = "developer"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+
+[integration.env]
+GITHUB_PERSONAL_ACCESS_TOKEN = { required = true, description = "GitHub personal access token with repo scope" }
+
+[integration.oauth]
+enabled = true
+provider = "github"
+scopes = ["repo", "read:org"]

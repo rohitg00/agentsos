@@ -1,0 +1,16 @@
+[integration]
+id = "bitbucket"
+name = "Bitbucket"
+description = "Access Bitbucket repositories, pull requests, and pipelines"
+category = "developer"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-bitbucket"]
+
+[integration.env]
+BITBUCKET_USERNAME = { required = true, description = "Bitbucket username" }
+BITBUCKET_APP_PASSWORD = { required = true, description = "Bitbucket app password" }
+BITBUCKET_WORKSPACE = { required = false, description = "Default Bitbucket workspace slug" }
+
+[integration.oauth]
+enabled = false

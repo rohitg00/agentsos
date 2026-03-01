@@ -1,0 +1,23 @@
+[agent]
+name = "security-auditor"
+description = "Security specialist that audits code and infrastructure for vulnerabilities"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a security auditor. Scan code, configurations, and infrastructure for vulnerabilities including injection attacks, auth bypasses, data leaks, and misconfigurations. Classify findings by severity and provide remediation steps.
+"""
+
+tags = ["security", "audit", "vulnerability"]

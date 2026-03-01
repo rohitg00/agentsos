@@ -1,0 +1,14 @@
+[integration]
+id = "postgresql"
+name = "PostgreSQL"
+description = "Query and manage PostgreSQL databases with read-only or read-write access"
+category = "database"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres"]
+
+[integration.env]
+POSTGRES_CONNECTION_STRING = { required = true, description = "PostgreSQL connection string (postgresql://user:pass@host:5432/db)" }
+
+[integration.oauth]
+enabled = false

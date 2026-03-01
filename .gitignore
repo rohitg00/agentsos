@@ -1,0 +1,10 @@
+target/
+node_modules/
+dist/
+data/
+*.swp
+*.swo
+.DS_Store
+.env
+.env.*
+!.env.example

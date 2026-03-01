@@ -1,0 +1,23 @@
+[agent]
+name = "assistant"
+description = "General-purpose assistant for everyday tasks, Q&A, and productivity"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a helpful general assistant. Answer questions clearly, complete tasks efficiently, and proactively offer relevant follow-up suggestions. Adapt your tone and detail level to match the user's needs.
+"""
+
+tags = ["assistant", "general", "productivity"]

@@ -1,0 +1,78 @@
+[hand]
+id = "twitter"
+name = "Twitter Monitor"
+description = "Monitors Twitter/X for mentions, trends, and conversations, then drafts and queues responses"
+enabled = true
+schedule = "*/15 * * * *"
+
+[hand.tools]
+allowed = ["tool::web_search", "tool::web_fetch", "tool::http_request", "memory::store", "memory::query", "tool::file_write"]
+
+[[hand.settings]]
+key = "track_keywords"
+type = "text"
+default = ""
+options = []
+
+[[hand.settings]]
+key = "response_mode"
+type = "select"
+default = "draft"
+options = ["draft", "auto_reply", "notify_only"]
+
+[[hand.settings]]
+key = "sentiment_filter"
+type = "select"
+default = "all"
+options = ["all", "positive", "negative", "neutral"]
+
+[[hand.settings]]
+key = "max_responses_per_hour"
+type = "number"
+default = "10"
+options = ["5", "10", "25", "50"]
+
+[[hand.settings]]
+key = "tone"
+type = "select"
+default = "professional"
+options = ["professional", "casual", "witty", "technical"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.5
+system_prompt = """
+Phase 1 - Mention Scanning: Search Twitter/X for mentions of tracked keywords, handles, and hashtags. Collect tweet text, author info, engagement metrics, and thread context. Skip retweets unless they add commentary.
+
+Phase 2 - Sentiment Analysis: Classify each mention as positive, negative, neutral, or question. Apply the sentiment filter to focus on the configured subset. Score urgency based on author reach and negative sentiment intensity.
+
+Phase 3 - Thread Reconstruction: For tweets that are part of a conversation, reconstruct the full thread to understand context. Identify the original poster, key discussion points, and any questions directed at the tracked accounts.
+
+Phase 4 - Response Drafting: For mentions requiring a response, draft replies matching the configured tone. Keep responses concise and within character limits. For negative mentions, acknowledge concerns before addressing them. For questions, provide direct answers with links to resources.
+
+Phase 5 - Content Opportunity Detection: Identify trending topics relevant to tracked keywords. Draft original tweet suggestions that can capitalize on current trends. Include relevant hashtags and optimal posting times.
+
+Phase 6 - Queue Management: Store drafted responses in memory with status (pending, approved, posted). In draft mode, hold all responses for human review. In auto_reply mode, post responses below the hourly cap. In notify_only mode, just store summaries.
+
+Phase 7 - Analytics Update: Update engagement metrics, response rates, sentiment trends, and follower interaction patterns. Generate a summary of key conversations and trending topics since last run.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Mentions Found"
+key = "mentions_count"
+
+[[hand.dashboard.metrics]]
+label = "Responses Queued"
+key = "responses_queued"
+
+[[hand.dashboard.metrics]]
+label = "Sentiment Score"
+key = "avg_sentiment"
+
+[[hand.dashboard.metrics]]
+label = "Trending Topics"
+key = "trending_count"
+
+[[hand.dashboard.metrics]]
+label = "Engagement Rate"
+key = "engagement_rate"

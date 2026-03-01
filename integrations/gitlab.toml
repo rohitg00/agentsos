@@ -1,0 +1,15 @@
+[integration]
+id = "gitlab"
+name = "GitLab"
+description = "Access GitLab repositories, merge requests, and CI/CD pipelines"
+category = "developer"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-gitlab"]
+
+[integration.env]
+GITLAB_PERSONAL_ACCESS_TOKEN = { required = true, description = "GitLab personal access token" }
+GITLAB_URL = { required = false, description = "GitLab instance URL (default: https://gitlab.com)" }
+
+[integration.oauth]
+enabled = false

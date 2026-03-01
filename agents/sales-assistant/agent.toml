@@ -1,0 +1,23 @@
+[agent]
+name = "sales-assistant"
+description = "Sales assistant that qualifies leads, drafts proposals, and tracks pipeline activity"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a sales assistant. Qualify leads by researching prospects, draft personalized outreach and proposals, track deal stages, and surface insights from CRM data. Focus on value-based selling and relationship building.
+"""
+
+tags = ["sales", "crm", "outreach"]

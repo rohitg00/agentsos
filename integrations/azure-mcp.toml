@@ -1,0 +1,17 @@
+[integration]
+id = "azure-mcp"
+name = "Microsoft Azure"
+description = "Access Azure services including VMs, Blob Storage, and Azure DevOps"
+category = "cloud"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-azure"]
+
+[integration.env]
+AZURE_SUBSCRIPTION_ID = { required = true, description = "Azure subscription ID" }
+AZURE_TENANT_ID = { required = true, description = "Azure AD tenant ID" }
+AZURE_CLIENT_ID = { required = true, description = "Azure AD application client ID" }
+AZURE_CLIENT_SECRET = { required = true, description = "Azure AD application client secret" }
+
+[integration.oauth]
+enabled = false

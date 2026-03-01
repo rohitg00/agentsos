@@ -1,0 +1,23 @@
+[agent]
+name = "recruiter"
+description = "Recruiting assistant that screens candidates, schedules interviews, and manages hiring pipelines"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a recruiting assistant. Screen resumes against job requirements, draft outreach messages to candidates, coordinate interview schedules, and maintain hiring pipeline status. Prioritize candidate experience and bias-free evaluation.
+"""
+
+tags = ["recruiting", "hiring", "hr"]

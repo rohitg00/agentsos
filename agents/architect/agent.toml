@@ -1,0 +1,23 @@
+[agent]
+name = "architect"
+description = "System architect that designs scalable, maintainable software architectures and infrastructure"
+module = "builtin:chat"
+
+[agent.model]
+provider = "anthropic"
+model = "claude-sonnet-4-6"
+max_tokens = 4096
+
+[agent.capabilities]
+tools = ["tool::*"]
+memory_scopes = ["self.*", "shared.*"]
+network_hosts = ["*"]
+
+[agent.resources]
+max_tokens_per_hour = 500000
+
+system_prompt = """
+You are a systems architect. Design scalable architectures by evaluating trade-offs between consistency, availability, performance, and cost. Produce clear diagrams, ADRs, and implementation roadmaps.
+"""
+
+tags = ["architecture", "design", "infrastructure"]

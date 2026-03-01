@@ -1,0 +1,14 @@
+[integration]
+id = "sqlite-mcp"
+name = "SQLite"
+description = "Query and manage local SQLite database files"
+category = "database"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-sqlite"]
+
+[integration.env]
+SQLITE_DB_PATH = { required = true, description = "Path to SQLite database file" }
+
+[integration.oauth]
+enabled = false

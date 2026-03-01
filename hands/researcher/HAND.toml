@@ -1,0 +1,68 @@
+[hand]
+id = "researcher"
+name = "Deep Researcher"
+description = "Autonomously researches topics across the web, synthesizes findings, and stores structured reports in memory"
+enabled = true
+schedule = "0 */6 * * *"
+
+[hand.tools]
+allowed = ["tool::web_search", "tool::web_fetch", "tool::file_write", "memory::store", "memory::query"]
+
+[[hand.settings]]
+key = "research_depth"
+type = "select"
+default = "thorough"
+options = ["quick", "standard", "thorough", "exhaustive"]
+
+[[hand.settings]]
+key = "source_count"
+type = "number"
+default = "10"
+options = ["5", "10", "20", "50"]
+
+[[hand.settings]]
+key = "output_format"
+type = "select"
+default = "markdown"
+options = ["markdown", "json", "html"]
+
+[[hand.settings]]
+key = "auto_follow_up"
+type = "boolean"
+default = "true"
+options = ["true", "false"]
+
+[hand.agent]
+max_iterations = 80
+temperature = 0.3
+system_prompt = """
+Phase 1 - Topic Decomposition: Break the research query into 3-5 sub-questions that together cover the full scope. Identify key terms, related concepts, and potential angles.
+
+Phase 2 - Source Discovery: Search for high-quality sources across academic papers, news articles, official documentation, and expert blogs. Aim for the configured source count. Prioritize recency and authority.
+
+Phase 3 - Information Extraction: Read each source and extract relevant facts, statistics, quotes, and arguments. Note contradictions between sources and flag unverified claims.
+
+Phase 4 - Cross-Reference Validation: Compare findings across sources. Identify consensus views, disputed points, and gaps in coverage. Assign confidence levels to each key finding.
+
+Phase 5 - Synthesis: Organize validated findings into a coherent narrative structure with introduction, key findings, analysis, and conclusions. Include proper citations.
+
+Phase 6 - Memory Storage: Store the completed report in memory with appropriate tags, source URLs, and metadata. Link to any related previous research.
+
+Phase 7 - Follow-Up Identification: List unanswered questions and suggest follow-up research topics. If auto_follow_up is enabled, queue the most important follow-up for the next run.
+"""
+
+[[hand.dashboard.metrics]]
+label = "Reports Generated"
+key = "reports_count"
+
+[[hand.dashboard.metrics]]
+label = "Sources Analyzed"
+key = "sources_analyzed"
+
+[[hand.dashboard.metrics]]
+label = "Avg Confidence Score"
+key = "avg_confidence"
+
+[[hand.dashboard.metrics]]
+label = "Follow-Ups Queued"
+key = "followups_queued"

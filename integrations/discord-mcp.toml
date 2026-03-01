@@ -1,0 +1,16 @@
+[integration]
+id = "discord-mcp"
+name = "Discord"
+description = "Send messages, read channels, and manage Discord servers"
+category = "communication"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-discord"]
+
+[integration.env]
+DISCORD_BOT_TOKEN = { required = true, description = "Discord bot token" }
+
+[integration.oauth]
+enabled = true
+provider = "discord"
+scopes = ["bot", "messages.read"]

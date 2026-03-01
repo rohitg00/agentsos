@@ -1,0 +1,14 @@
+[integration]
+id = "brave-search"
+name = "Brave Search"
+description = "Search the web using the Brave Search API"
+category = "search"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-brave-search"]
+
+[integration.env]
+BRAVE_API_KEY = { required = true, description = "Brave Search API key" }
+
+[integration.oauth]
+enabled = false

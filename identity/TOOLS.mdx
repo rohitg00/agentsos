@@ -1,0 +1,98 @@
+# Available Tools Reference
+
+## Core Tools
+
+### File System
+| Tool | Description |
+|------|-------------|
+| `tool::file_read` | Read file contents from disk |
+| `tool::file_write` | Write or create files on disk |
+| `tool::file_delete` | Delete a file (requires approval) |
+| `tool::file_list` | List directory contents |
+| `tool::file_search` | Search for files by name pattern |
+| `tool::file_grep` | Search file contents by regex |
+
+### Shell
+| Tool | Description |
+|------|-------------|
+| `tool::shell_exec` | Execute a shell command (sandboxed) |
+| `tool::shell_script` | Execute a multi-line script |
+
+### Web
+| Tool | Description |
+|------|-------------|
+| `tool::web_search` | Search the web via configured provider |
+| `tool::web_fetch` | Fetch and parse a URL |
+| `tool::http_request` | Make arbitrary HTTP requests |
+| `tool::browser_navigate` | Navigate a headless browser to a URL |
+| `tool::browser_click` | Click an element in the browser |
+| `tool::browser_type` | Type text into a browser input |
+| `tool::browser_screenshot` | Take a browser screenshot |
+
+### Memory
+| Tool | Description |
+|------|-------------|
+| `memory::store` | Store an entry in agent memory |
+| `memory::query` | Search agent memory |
+| `memory::forget` | Remove a memory entry |
+| `memory::evolve` | Update a memory entry with versioning |
+| `memory::list` | List memory entries by scope/tag |
+
+### Communication
+| Tool | Description |
+|------|-------------|
+| `tool::email_draft` | Draft an email message |
+| `tool::email_send` | Send an email (requires approval) |
+| `tool::notify` | Send a notification to configured channel |
+| `tool::clipboard_read` | Read system clipboard |
+| `tool::clipboard_write` | Write to system clipboard |
+
+### Computation
+| Tool | Description |
+|------|-------------|
+| `tool::calculate` | Evaluate mathematical expressions |
+| `tool::json_parse` | Parse and query JSON data |
+| `tool::csv_parse` | Parse and query CSV data |
+| `tool::template_render` | Render a template with variables |
+
+## MCP Integration Tools
+
+MCP integrations add tools dynamically based on configured servers in `integrations/*.toml`. Each integration provides its own tool namespace:
+
+| Namespace | Source |
+|-----------|--------|
+| `github::*` | GitHub API via MCP |
+| `slack::*` | Slack API via MCP |
+| `notion::*` | Notion API via MCP |
+| `linear::*` | Linear API via MCP |
+| `postgres::*` | PostgreSQL queries via MCP |
+| `brave::*` | Brave Search via MCP |
+
+## Tool Permissions
+
+### Permission Levels
+- **auto** - Tool executes without confirmation
+- **confirm** - User must approve each invocation
+- **deny** - Tool is blocked for this agent
+
+### Default Permissions
+- File read operations: auto
+- File write operations: confirm
+- Shell execution: confirm
+- Web requests: auto
+- Destructive operations (delete, send): confirm
+- Memory operations: auto
+
+### Overrides
+Per-agent permissions are configured in `agent.toml` under `[agent.capabilities]`. The `tools` array specifies allowed tool patterns:
+- `"tool::*"` allows all core tools
+- `"tool::file_*"` allows only file tools
+- `"memory::*"` allows all memory operations
+- `"github::*"` allows all GitHub integration tools
+
+## Custom Tools
+
+Custom tools can be registered via:
+1. MCP server integrations in `integrations/*.toml`
+2. Function definitions in worker TypeScript files
+3. Shell script wrappers in `tools/` directory

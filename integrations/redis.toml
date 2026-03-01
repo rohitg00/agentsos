@@ -1,0 +1,14 @@
+[integration]
+id = "redis"
+name = "Redis"
+description = "Read and write Redis keys, manage data structures, and monitor cache"
+category = "database"
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-redis"]
+
+[integration.env]
+REDIS_URL = { required = true, description = "Redis connection URL (redis://host:6379)" }
+
+[integration.oauth]
+enabled = false
