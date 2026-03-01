@@ -7,8 +7,8 @@ Agent Operating System built on three primitives: **Worker**, **Function**, **Tr
 Every capability — agents, memory, security, LLM routing, workflows, tools, swarms, knowledge graphs, session replay, vault — is a plain function registered on an [iii-engine](https://iii.dev) bus. No frameworks, no vendor lock-in, no magic.
 
 ```
-┌───────────────────────────────────────────────────────────────┐
-│                        iii-engine                             │
+┌──────────────────────────────────────────────────────────────┐
+│                        iii-engine                            │
 │              Worker · Function · Trigger                     │
 ├─────────┬───────────┬───────────┬───────────┬────────────────┤
 │ agent   │ security  │    llm    │  memory   │     wasm       │
@@ -18,18 +18,18 @@ Every capability — agents, memory, security, LLM routing, workflows, tools, sw
 │ hand    │  sign     │   (Rust)  │  (Rust)   │                │
 │ (Rust)  │  (Rust)   │           │           │                │
 ├─────────┴───────────┴───────────┴───────────┴────────────────┤
-│  api · workflows · tools(60+) · skills · channels · hooks   │
-│  approval · streaming · mcp · a2a · vault · browser · swarm │
+│  api · workflows · tools(60+) · skills · channels · hooks    │
+│  approval · streaming · mcp · a2a · vault · browser · swarm  │
 │  knowledge-graph · session-replay · skillkit · tool-profiles │
 │                      (TypeScript)                            │
-├───────────────────────────────────────────────────────────────┤
-│                    embedding (Python)                         │
-├───────────────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────┤
+│                    embedding (Python)                        │
+├──────────────────────────────────────────────────────────────┤
 │     CLI (Rust)              TUI (Rust/ratatui)               │
-├───────────────────────────────────────────────────────────────┤
+├──────────────────────────────────────────────────────────────┤
 │ 30 agents · 7 hands · 25 integrations · 40 channels          │
-│ 8 tool profiles · 47 models · 22 TUI screens                │
-└───────────────────────────────────────────────────────────────┘
+│ 8 tool profiles · 47 models · 22 TUI screens                 │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ## Quickstart
