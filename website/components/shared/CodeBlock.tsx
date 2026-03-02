@@ -157,10 +157,12 @@ export default function CodeBlock({
   const [copied, setCopied] = useState(false);
   const lines = tokenize(code, lang);
 
-  const copy = () => {
-    navigator.clipboard.writeText(code);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
   const langColors: Record<string, string> = {
@@ -188,6 +190,7 @@ export default function CodeBlock({
         </div>
         <button
           onClick={copy}
+          aria-label={copied ? "Copied to clipboard" : "Copy code"}
           className="text-zinc-500 hover:text-white transition-colors p-1 rounded"
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}
@@ -196,7 +199,7 @@ export default function CodeBlock({
       <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
         <code className="font-mono">
           {lines.map((lineTokens, i) => (
-            <div key={i}>
+            <span key={i} className="block">
               {lineTokens.length === 0
                 ? "\n"
                 : lineTokens.map((token, j) => (
@@ -204,7 +207,7 @@ export default function CodeBlock({
                       {token.text}
                     </span>
                   ))}
-            </div>
+            </span>
           ))}
         </code>
       </pre>

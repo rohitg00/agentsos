@@ -63,11 +63,12 @@ function useTypingAnimation() {
 
 function TerminalLine({ text, type }: { text: string; type: string }) {
   if (type === "command") {
-    const dollarEnd = text.indexOf(" ");
+    const spaceIndex = text.indexOf(" ");
+    const splitAt = spaceIndex === -1 ? text.length : spaceIndex;
     return (
       <div className="font-mono text-sm leading-relaxed">
-        <span className="text-muted">{text.slice(0, dollarEnd)}</span>
-        <span className="text-white">{text.slice(dollarEnd)}</span>
+        <span className="text-muted">{text.slice(0, splitAt)}</span>
+        <span className="text-white">{text.slice(splitAt)}</span>
       </div>
     );
   }
@@ -108,7 +109,8 @@ export default function Hero() {
 
             <FadeIn delay={100}>
               <p className="text-muted text-base md:text-lg mb-10 max-w-lg leading-relaxed font-mono">
-                Built on iii-engine. Rust core. TypeScript workers. Python embeddings.
+                Built on iii-engine. Rust core. TypeScript workers. Python
+                embeddings.
               </p>
             </FadeIn>
 
@@ -123,7 +125,9 @@ export default function Hero() {
                         duration={1800 + i * 100}
                       />
                     </div>
-                    <div className="text-xs text-muted mt-1 font-mono">{stat.label}</div>
+                    <div className="text-xs text-muted mt-1 font-mono">
+                      {stat.label}
+                    </div>
                   </div>
                 ))}
               </div>

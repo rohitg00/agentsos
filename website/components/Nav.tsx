@@ -101,12 +101,17 @@ export default function Nav() {
             onClick={() => setMobileOpen(!mobileOpen)}
             className="lg:hidden text-muted hover:text-white p-1.5"
             aria-label="Toggle menu"
+            aria-expanded={mobileOpen}
+            aria-controls="mobile-menu"
           >
             {mobileOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
 
         <div
+          id="mobile-menu"
+          role="region"
+          aria-hidden={!mobileOpen}
           className={`lg:hidden overflow-hidden transition-all duration-200 ease-in-out ${
             mobileOpen ? "max-h-[500px] opacity-100 pb-4" : "max-h-0 opacity-0"
           }`}

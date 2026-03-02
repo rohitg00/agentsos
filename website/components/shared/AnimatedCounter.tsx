@@ -25,7 +25,7 @@ export default function AnimatedCounter({
           observer.unobserve(el);
         }
       },
-      { threshold: 0.3 }
+      { threshold: 0.3 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -33,15 +33,17 @@ export default function AnimatedCounter({
 
   useEffect(() => {
     if (!started) return;
+    let frameId: number;
     const startTime = performance.now();
     const animate = (now: number) => {
       const elapsed = now - startTime;
       const progress = Math.min(elapsed / duration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(eased * end));
-      if (progress < 1) requestAnimationFrame(animate);
+      if (progress < 1) frameId = requestAnimationFrame(animate);
     };
-    requestAnimationFrame(animate);
+    frameId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frameId);
   }, [started, end, duration]);
 
   return (

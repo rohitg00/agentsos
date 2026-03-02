@@ -23,15 +23,18 @@ const steps = [
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
 
-  const copy = () => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {}
   };
 
   return (
     <button
       onClick={copy}
+      aria-label={copied ? "Copied to clipboard" : "Copy command"}
       className="text-zinc-500 hover:text-white transition-colors shrink-0 p-1 rounded"
     >
       {copied ? <Check size={12} /> : <Copy size={12} />}
