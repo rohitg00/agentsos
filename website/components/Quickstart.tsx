@@ -1,0 +1,86 @@
+import { useState } from "react";
+import { Copy, Check } from "lucide-react";
+import FadeIn from "./shared/FadeIn";
+import SectionHeader from "./shared/SectionHeader";
+
+const steps = [
+  { cmd: "npm install agents-os", desc: "Install the Agents OS runtime" },
+  {
+    cmd: "agents-os init --template coder",
+    desc: "Scaffold a new agent project",
+  },
+  {
+    cmd: "agents-os config set provider anthropic",
+    desc: "Configure your LLM provider",
+  },
+  {
+    cmd: "agents-os tools add git code search",
+    desc: "Add tools to your agent",
+  },
+  { cmd: "agents-os run", desc: "Launch your agent" },
+];
+
+function CopyButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={copy}
+      className="text-zinc-500 hover:text-white transition-colors shrink-0 p-1 rounded"
+    >
+      {copied ? <Check size={12} /> : <Copy size={12} />}
+    </button>
+  );
+}
+
+export default function Quickstart() {
+  return (
+    <section id="quickstart" className="py-24">
+      <div className="max-w-6xl mx-auto px-6">
+        <SectionHeader
+          badge="GET STARTED"
+          title="Up and Running in 60 Seconds"
+          subtitle="From zero to agent in five commands"
+        />
+
+        <FadeIn>
+          <div className="bg-surface border border-white/6 rounded-xl overflow-hidden max-w-2xl mx-auto">
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-white/6">
+              <div className="flex gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-primary/60" />
+                <div className="w-3 h-3 rounded-full bg-white/20" />
+                <div className="w-3 h-3 rounded-full bg-white/10" />
+              </div>
+              <span className="text-xs text-zinc-500 font-mono">terminal</span>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {steps.map((step, index) => (
+                <div key={step.cmd} className="flex items-start gap-3">
+                  <div className="bg-primary/20 text-primary w-6 h-6 rounded-full text-xs font-mono flex items-center justify-center shrink-0 mt-0.5">
+                    {index + 1}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <code className="font-mono text-sm text-white">
+                        {step.cmd}
+                      </code>
+                      <CopyButton text={step.cmd} />
+                    </div>
+                    <p className="text-muted text-xs mt-0.5">{step.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </FadeIn>
+      </div>
+    </section>
+  );
+}
