@@ -32,7 +32,10 @@ function renderMarkdown(content: string) {
 
     if (line.startsWith("### ")) {
       elements.push(
-        <h3 key={i} className="font-mono font-semibold text-sm mt-8 mb-3 text-zinc-200">
+        <h3
+          key={i}
+          className="font-mono font-semibold text-sm mt-8 mb-3 text-zinc-200"
+        >
           {line.slice(4)}
         </h3>,
       );
@@ -50,14 +53,19 @@ function renderMarkdown(content: string) {
       }
       i++;
       elements.push(
-        <div key={`code-${i}`} className="my-4 rounded-xl border border-white/6 bg-[#0a0a0a] overflow-hidden">
+        <div
+          key={`code-${i}`}
+          className="my-4 rounded-xl border border-white/6 bg-[#0a0a0a] overflow-hidden"
+        >
           {lang && (
             <div className="px-4 py-2 border-b border-white/6">
               <span className="font-mono text-[10px] text-primary">{lang}</span>
             </div>
           )}
           <pre className="p-4 overflow-x-auto text-sm leading-relaxed">
-            <code className="font-mono text-zinc-300">{codeLines.join("\n")}</code>
+            <code className="font-mono text-zinc-300">
+              {codeLines.join("\n")}
+            </code>
           </pre>
         </div>,
       );
@@ -86,7 +94,10 @@ function renderMarkdown(content: string) {
             <thead>
               <tr className="border-b border-white/10">
                 {headerCells.map((cell, j) => (
-                  <th key={j} className="text-left py-2 pr-4 text-xs text-muted font-medium">
+                  <th
+                    key={j}
+                    className="text-left py-2 pr-4 text-xs text-muted font-medium"
+                  >
                     {cell}
                   </th>
                 ))}
@@ -165,14 +176,33 @@ function renderMarkdown(content: string) {
   return elements;
 }
 
+function sanitizeUrl(url: string): string {
+  const trimmed = url.trim().toLowerCase();
+  if (
+    trimmed.startsWith("javascript:") ||
+    trimmed.startsWith("data:") ||
+    trimmed.startsWith("vbscript:")
+  ) {
+    return "#";
+  }
+  return url;
+}
+
 function inlineFormat(text: string): string {
   return text
     .replace(
       /\[([^\]]+)\]\(([^)]+)\)/g,
-      '<a href="$2" class="text-primary hover:underline">$1</a>',
+      (_, linkText, url) =>
+        `<a href="${sanitizeUrl(url)}" class="text-primary hover:underline">${linkText}</a>`,
     )
-    .replace(/`([^`]+)`/g, '<code class="text-primary/80 bg-white/5 px-1 py-0.5 rounded text-xs">$1</code>')
-    .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white font-semibold">$1</strong>');
+    .replace(
+      /`([^`]+)`/g,
+      '<code class="text-primary/80 bg-white/5 px-1 py-0.5 rounded text-xs">$1</code>',
+    )
+    .replace(
+      /\*\*([^*]+)\*\*/g,
+      '<strong class="text-white font-semibold">$1</strong>',
+    );
 }
 
 export default function DocsPage() {
@@ -184,7 +214,10 @@ export default function DocsPage() {
     return (
       <div className="py-20 text-center">
         <h1 className="font-mono font-bold text-2xl mb-4">Page not found</h1>
-        <Link to="/docs" className="text-primary font-mono text-sm hover:underline">
+        <Link
+          to="/docs"
+          className="text-primary font-mono text-sm hover:underline"
+        >
           Back to docs
         </Link>
       </div>
@@ -210,7 +243,10 @@ export default function DocsPage() {
             to={`/docs/${prev.slug}`}
             className="flex items-center gap-2 text-muted hover:text-white transition-colors font-mono text-sm group"
           >
-            <ChevronLeft size={14} className="group-hover:-translate-x-0.5 transition-transform" />
+            <ChevronLeft
+              size={14}
+              className="group-hover:-translate-x-0.5 transition-transform"
+            />
             {prev.title}
           </Link>
         ) : (
@@ -222,7 +258,10 @@ export default function DocsPage() {
             className="flex items-center gap-2 text-muted hover:text-white transition-colors font-mono text-sm group"
           >
             {next.title}
-            <ChevronRight size={14} className="group-hover:translate-x-0.5 transition-transform" />
+            <ChevronRight
+              size={14}
+              className="group-hover:translate-x-0.5 transition-transform"
+            />
           </Link>
         ) : (
           <div />

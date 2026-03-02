@@ -80,10 +80,14 @@ export default function CodeExamples() {
         />
 
         <FadeIn>
-          <div className="flex gap-1 mb-4">
+          <div role="tablist" className="flex gap-1 mb-4">
             {tabs.map((tab, i) => (
               <button
                 key={tab.label}
+                role="tab"
+                aria-selected={active === i}
+                aria-controls={`tabpanel-${i}`}
+                id={`tab-${i}`}
                 onClick={() => setActive(i)}
                 className={`px-4 py-2 text-sm font-mono transition-colors rounded-t-lg ${
                   active === i
@@ -96,11 +100,17 @@ export default function CodeExamples() {
             ))}
           </div>
 
-          <CodeBlock
-            code={tabs[active].code}
-            lang={tabs[active].lang}
-            filename={tabs[active].filename}
-          />
+          <div
+            role="tabpanel"
+            id={`tabpanel-${active}`}
+            aria-labelledby={`tab-${active}`}
+          >
+            <CodeBlock
+              code={tabs[active].code}
+              lang={tabs[active].lang}
+              filename={tabs[active].filename}
+            />
+          </div>
         </FadeIn>
 
         <FadeIn delay={200} className="mt-8">
@@ -108,10 +118,14 @@ export default function CodeExamples() {
             {flow.map((step, i) => (
               <div key={step.label} className="flex items-center gap-3">
                 <div className="border border-primary/30 rounded-lg px-4 py-2 bg-card text-center">
-                  <div className="font-mono font-semibold text-sm text-primary">{step.label}</div>
+                  <div className="font-mono font-semibold text-sm text-primary">
+                    {step.label}
+                  </div>
                   <div className="text-muted text-xs font-mono">{step.sub}</div>
                 </div>
-                {i < flow.length - 1 && <ArrowRight size={14} className="text-zinc-600" />}
+                {i < flow.length - 1 && (
+                  <ArrowRight size={14} className="text-zinc-600" />
+                )}
               </div>
             ))}
           </div>

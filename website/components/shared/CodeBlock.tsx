@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Copy, Check } from "lucide-react";
 
 type Token = { text: string; className: string };
@@ -155,14 +155,23 @@ export default function CodeBlock({
   filename?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
   const lines = tokenize(code, lang);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, []);
 
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch {}
+      timerRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Clipboard write failed:", err);
+    }
   };
 
   const langColors: Record<string, string> = {

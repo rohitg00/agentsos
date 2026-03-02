@@ -78,6 +78,7 @@ export default function Nav() {
               href="https://github.com/rohitg00/agentsos"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="GitHub repository"
               className="text-muted hover:text-white transition-colors"
             >
               <svg
@@ -136,6 +137,7 @@ export default function Nav() {
                 href="https://github.com/rohitg00/agentsos"
                 target="_blank"
                 rel="noopener noreferrer"
+                aria-label="GitHub repository"
                 className="text-muted hover:text-white transition-colors"
               >
                 <svg

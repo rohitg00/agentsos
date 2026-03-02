@@ -65,7 +65,6 @@ export default function DocsLayout() {
         <aside
           id="docs-sidebar"
           role="navigation"
-          aria-hidden={!sidebarOpen}
           className={`fixed lg:sticky top-14 left-0 z-40 h-[calc(100vh-3.5rem)] w-64 shrink-0 border-r border-white/6 bg-black overflow-y-auto transition-transform duration-200 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}

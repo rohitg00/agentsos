@@ -20,6 +20,18 @@ html {
   html {
     scroll-behavior: auto;
   }
+
+  .card-hover {
+    transition: none;
+  }
+
+  .card-hover:hover {
+    transform: none;
+  }
+
+  .typing-cursor {
+    animation: none;
+  }
 }
 
 body {
