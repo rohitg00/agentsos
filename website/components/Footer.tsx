@@ -11,6 +11,7 @@ export default function Footer() {
               href="https://github.com/rohitg00/agentos"
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="GitHub (opens in new tab)"
               className="text-muted text-xs font-mono hover:text-white transition-colors"
             >
               GitHub

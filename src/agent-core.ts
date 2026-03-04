@@ -169,25 +169,29 @@ async function executeLlmCall(
     tools,
   });
 
-  triggerVoidFn("replay::record", {
-    sessionId: replaySessionId,
-    agentId,
-    action: "llm_call",
-    data: { model: response.model, usage: response.usage },
-    durationMs: Date.now() - llmStart,
-    iteration,
-  });
+  try {
+    triggerVoidFn("replay::record", {
+      sessionId: replaySessionId,
+      agentId,
+      action: "llm_call",
+      data: { model: response.model, usage: response.usage },
+      durationMs: Date.now() - llmStart,
+      iteration,
+    });
+  } catch {}
 
   if (response.usage) {
-    triggerVoidFn("cost::track", {
-      agentId,
-      sessionId: replaySessionId,
-      model: response.model || (model as any).model,
-      inputTokens: response.usage.input || 0,
-      outputTokens: response.usage.output || 0,
-      cacheReadTokens: response.usage.cacheRead || 0,
-      cacheWriteTokens: response.usage.cacheWrite || 0,
-    });
+    try {
+      triggerVoidFn("cost::track", {
+        agentId,
+        sessionId: replaySessionId,
+        model: response.model || (model as any).model,
+        inputTokens: response.usage.input || 0,
+        outputTokens: response.usage.output || 0,
+        cacheReadTokens: response.usage.cacheRead || 0,
+        cacheWriteTokens: response.usage.cacheWrite || 0,
+      });
+    } catch {}
   }
 
   return response;
@@ -477,7 +481,13 @@ async function toolLoop(
           iteration: iterations,
         },
       });
-    } catch {}
+    } catch (err: any) {
+      console.warn("Audit publish failed", {
+        agentId,
+        iteration: iterations,
+        error: err?.message,
+      });
+    }
 
     const toolResults: { toolCallId: string; output: unknown }[] = [];
     for (const tc of currentResponse.toolCalls as ToolCall[]) {

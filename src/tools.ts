@@ -308,7 +308,7 @@ registerFunction(
       return await withToolMetrics("tool::web_fetch", async () => {
         const resp = await fetch(url, {
           signal: controller.signal,
-          headers: { "User-Agent": "agentos/0.1" },
+          headers: { "User-Agent": "AgentOS/0.0.1" },
         });
 
         const contentType = resp.headers.get("content-type") || "";

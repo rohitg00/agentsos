@@ -172,7 +172,7 @@ registerFunction(
         description ||
         "AI agent operating system with multi-agent orchestration",
       url: baseUrl,
-      version: "0.1.0",
+      version: "0.0.1",
       capabilities: {
         streaming: false,
         pushNotifications: false,

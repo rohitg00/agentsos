@@ -122,7 +122,7 @@ describe("a2a::agent_card", () => {
     });
     expect(result.name).toBe("agentos");
     expect(result.url).toBe("https://example.com");
-    expect(result.version).toBe("0.1.0");
+    expect(result.version).toBe("0.0.1");
   });
 
   it("includes capabilities", async () => {

@@ -355,7 +355,7 @@ registerFunction(
     try {
       const resp = await fetch(url, {
         signal: controller.signal,
-        headers: { "User-Agent": "agentos/0.1" },
+        headers: { "User-Agent": "AgentOS/0.0.1" },
       });
 
       const contentLength = parseInt(resp.headers.get("content-length") || "0");
@@ -1817,7 +1817,7 @@ registerFunction(
     retries?: number;
   }) => {
     if (!url) throw new Error("url is required");
-    assertNoSsrf(url);
+    await assertNoSsrf(url);
 
     const httpMethod = (method || "GET").toUpperCase();
     const timeoutMs = Math.min(timeout || 30000, 60000);
@@ -1832,7 +1832,7 @@ registerFunction(
         const opts: RequestInit = {
           method: httpMethod,
           headers: {
-            "User-Agent": "AgentOS/1.0",
+            "User-Agent": "AgentOS/0.0.1",
             ...(headers || {}),
           },
           signal: controller.signal,

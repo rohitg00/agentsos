@@ -61,7 +61,7 @@ async function sendMessage(replyToken: string, text: string) {
   const messages = chunks
     .slice(0, 5)
     .map((chunk) => ({ type: "text", text: chunk }));
-  await fetch(`${API_URL}/reply`, {
+  const res = await fetch(`${API_URL}/reply`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -69,4 +69,8 @@ async function sendMessage(replyToken: string, text: string) {
     },
     body: JSON.stringify({ replyToken, messages }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`LINE send failed (${res.status}): ${body.slice(0, 300)}`);
+  }
 }

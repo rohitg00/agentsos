@@ -284,7 +284,7 @@ async fn main() -> Result<()> {
                 println!("{}", serde_json::to_string_pretty(&resp)?);
             } else {
                 println!("{} agentos v{}", "●".green(),
-                    resp["version"].as_str().unwrap_or("0.1.0"));
+                    resp["version"].as_str().unwrap_or("0.0.1"));
                 println!("  Workers: {}", resp["workers"]);
                 println!("  Uptime:  {:.0}s", resp["uptime"].as_f64().unwrap_or(0.0));
             }

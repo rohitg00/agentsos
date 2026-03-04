@@ -169,7 +169,7 @@ registerFunction(
     const initResult = (await sendRpc(conn, "initialize", {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      clientInfo: { name: "agentos", version: "0.1.0" },
+      clientInfo: { name: "agentos", version: "0.0.1" },
     })) as any;
 
     conn.capabilities = initResult?.capabilities || {};
@@ -352,7 +352,7 @@ registerFunction(
             result: {
               protocolVersion: "2024-11-05",
               capabilities: { tools: {} },
-              serverInfo: { name: "agentos", version: "0.1.0" },
+              serverInfo: { name: "agentos", version: "0.0.1" },
             },
           };
         }

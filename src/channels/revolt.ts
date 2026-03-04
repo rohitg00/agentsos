@@ -56,13 +56,22 @@ async function sendMessage(channelId: string, text: string) {
   }
   const chunks = splitMessage(text, 2000);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}/channels/${channelId}/messages`, {
-      method: "POST",
-      headers: {
-        "x-bot-token": token,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `${API_URL}/channels/${encodeURIComponent(channelId)}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "x-bot-token": token,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ content: chunk }),
       },
-      body: JSON.stringify({ content: chunk }),
-    });
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Revolt send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

@@ -52,16 +52,26 @@ async function sendMessage(text: string) {
   if (!token) {
     throw new Error("GOTIFY_TOKEN not configured");
   }
+  const normalizedUrl = baseUrl.replace(/\/+$/, "");
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${baseUrl}/message?token=${encodeURIComponent(token)}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title: "AgentOS",
-        message: chunk,
-        priority: 5,
-      }),
-    });
+    const res = await fetch(
+      `${normalizedUrl}/message?token=${encodeURIComponent(token)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: "AgentOS",
+          message: chunk,
+          priority: 5,
+        }),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Gotify send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

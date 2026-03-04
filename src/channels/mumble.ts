@@ -53,10 +53,23 @@ async function sendMessage(channel: string, text: string) {
   }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${bridgeUrl}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, message: chunk }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${bridgeUrl}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel, message: chunk }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Mumble send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

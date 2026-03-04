@@ -59,7 +59,7 @@ async function sendMessage(id: number, text: string, isThread: boolean) {
     ? { thread_id: id, content: text }
     : { channel_id: id, content: text };
 
-  await fetch(`${API_URL}/${endpoint}`, {
+  const res = await fetch(`${API_URL}/${endpoint}`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -67,4 +67,8 @@ async function sendMessage(id: number, text: string, isThread: boolean) {
     },
     body: JSON.stringify(payload),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Twist send failed (${res.status}): ${body.slice(0, 300)}`);
+  }
 }

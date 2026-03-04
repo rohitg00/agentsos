@@ -1136,12 +1136,12 @@ fn draw_settings(f: &mut Frame, app: &App, block: Block, area: Rect) {
 fn draw_welcome(f: &mut Frame, block: Block, area: Rect) {
     let logo = vec![
         Line::from(""),
-        Line::from(Span::styled(r"     _                    _   ____   ___  ____  ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"    / \   __ _  ___ _ __ | |_/ ___| / _ \/ ___| ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"   / _ \ / _` |/ _ \ '_ \| __\___ \| | | \___ \ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"  / ___ \ (_| |  __/ | | | |_ ___) | |_| |___) |", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r" /_/   \_\__, |\___|_| |_|\__|____/ \___/|____/ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"         |___/                                   ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r"     _                    _    ___  ____  ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r"    / \   __ _  ___ _ __ | |_ / _ \/ ___| ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r"   / _ \ / _` |/ _ \ '_ \| __| | | \___ \ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r"  / ___ \ (_| |  __/ | | | |_| |_| |___) |", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r" /_/   \_\__, |\___|_| |_|\__|\___/|____/ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(r"         |___/                             ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
         Line::from(""),
         Line::from(Span::styled("  Agent Operating System v0.1.0", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
         Line::from(""),

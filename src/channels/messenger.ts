@@ -83,7 +83,8 @@ async function sendMessage(recipientId: string, text: string) {
   }
   const chunks = splitMessage(text, 2000);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}?access_token=${pageToken}`, {
+    const params = new URLSearchParams({ access_token: pageToken });
+    const res = await fetch(`${API_URL}?${params}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -91,5 +92,11 @@ async function sendMessage(recipientId: string, text: string) {
         message: { text: chunk },
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Messenger send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

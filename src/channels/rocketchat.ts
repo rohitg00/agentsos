@@ -62,9 +62,10 @@ async function sendMessage(roomId: string, text: string, tmid?: string) {
   if (!userId) {
     throw new Error("ROCKETCHAT_USER_ID not configured");
   }
+  const normalizedUrl = baseUrl.replace(/\/+$/, "");
   const chunks = splitMessage(text, 4000);
   for (const chunk of chunks) {
-    await fetch(`${baseUrl}/api/v1/chat.sendMessage`, {
+    const res = await fetch(`${normalizedUrl}/api/v1/chat.sendMessage`, {
       method: "POST",
       headers: {
         "X-Auth-Token": token,
@@ -79,5 +80,11 @@ async function sendMessage(roomId: string, text: string, tmid?: string) {
         },
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Rocket.Chat send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

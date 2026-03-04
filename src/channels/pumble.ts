@@ -59,7 +59,7 @@ async function sendMessage(channelId: string, text: string) {
   }
   const chunks = splitMessage(text, 4000);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}/messages`, {
+    const res = await fetch(`${API_URL}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -67,5 +67,11 @@ async function sendMessage(channelId: string, text: string) {
       },
       body: JSON.stringify({ channel: channelId, text: chunk }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Pumble send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

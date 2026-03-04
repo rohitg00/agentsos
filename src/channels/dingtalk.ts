@@ -67,13 +67,19 @@ async function sendMessage(text: string) {
     .digest("base64");
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(
-      `${API_URL}?access_token=${token}&timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`,
+    const res = await fetch(
+      `${API_URL}?access_token=${encodeURIComponent(token)}&timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ msgtype: "text", text: { content: chunk } }),
       },
     );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `DingTalk send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

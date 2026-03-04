@@ -33,6 +33,10 @@ registerFunction(
       sessionId: `signal:${channelKey}`,
     });
 
+    if (!response?.content) {
+      return { status_code: 200, body: { ok: true } };
+    }
+
     await sendMessage(source, response.content, groupId);
 
     triggerVoid("security::audit", {
@@ -62,7 +66,7 @@ async function sendMessage(recipient: string, text: string, groupId?: string) {
   }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${apiUrl}/v2/send`, {
+    const res = await fetch(`${apiUrl}/v2/send`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -73,5 +77,11 @@ async function sendMessage(recipient: string, text: string, groupId?: string) {
           : { recipients: [recipient] }),
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Signal send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

@@ -58,7 +58,7 @@ async function sendMessage(receiverId: string, text: string) {
   }
   const chunks = splitMessage(text, 7000);
   for (const chunk of chunks) {
-    await fetch(API_URL, {
+    const res = await fetch(API_URL, {
       method: "POST",
       headers: {
         "X-Viber-Auth-Token": token,
@@ -70,5 +70,11 @@ async function sendMessage(receiverId: string, text: string) {
         text: chunk,
       }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Viber send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

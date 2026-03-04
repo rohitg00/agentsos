@@ -62,14 +62,30 @@ async function sendMessage(chatId: number, text: string) {
   }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: chunk,
-        parse_mode: "Markdown",
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: chunk,
+            parse_mode: "Markdown",
+          }),
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Telegram send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

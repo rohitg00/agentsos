@@ -75,6 +75,12 @@ async function getTenantToken(): Promise<string> {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Feishu token fetch failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
     const data = (await res.json()) as { tenant_access_token: string };
     tenantToken = data.tenant_access_token;
     tenantTokenExpiry = Date.now() + 5400_000;
@@ -90,17 +96,26 @@ async function sendMessage(chatId: string, text: string) {
   const token = await getTenantToken();
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}/im/v1/messages?receive_id_type=chat_id`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
+    const res = await fetch(
+      `${API_URL}/im/v1/messages?receive_id_type=chat_id`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          receive_id: chatId,
+          msg_type: "text",
+          content: JSON.stringify({ text: chunk }),
+        }),
       },
-      body: JSON.stringify({
-        receive_id: chatId,
-        msg_type: "text",
-        content: JSON.stringify({ text: chunk }),
-      }),
-    });
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Feishu send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }
