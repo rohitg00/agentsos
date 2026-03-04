@@ -422,7 +422,7 @@ describe("channel::messenger::webhook", () => {
     );
   });
 
-  it("includes page token in API URL", async () => {
+  it("sends page token in Authorization header", async () => {
     await call("channel::messenger::webhook", {
       body: {
         entry: [
@@ -437,8 +437,8 @@ describe("channel::messenger::webhook", () => {
         ],
       },
     });
-    const fetchUrl = mockFetch.mock.calls[0][0] as string;
-    expect(fetchUrl).toContain("access_token=test-page-token");
+    const fetchOpts = mockFetch.mock.calls[0][1] as any;
+    expect(fetchOpts.headers.Authorization).toBe("Bearer test-page-token");
   });
 
   it("emits audit event", async () => {

@@ -333,9 +333,14 @@ async fn main() -> Result<()> {
                     print!("{} ", "you>".bold());
                     use std::io::Write;
                     std::io::stdout().flush()?;
-                    std::io::stdin().read_line(&mut input)?;
+                    let bytes_read = std::io::stdin().read_line(&mut input)?;
+                    if bytes_read == 0 {
+                        println!();
+                        break;
+                    }
                     let input = input.trim();
                     if input == "exit" || input == "quit" { break; }
+                    if input.is_empty() { continue; }
 
                     let resp: Value = client.post(format!("{}/api/agents/{}/message", api_base, agent))
                         .json(&json!({ "message": input }))
@@ -528,9 +533,14 @@ async fn main() -> Result<()> {
                 print!("{} ", "you>".bold());
                 use std::io::Write;
                 std::io::stdout().flush()?;
-                std::io::stdin().read_line(&mut input)?;
+                let bytes_read = std::io::stdin().read_line(&mut input)?;
+                if bytes_read == 0 {
+                    println!();
+                    break;
+                }
                 let input = input.trim();
                 if input == "exit" || input == "quit" { break; }
+                if input.is_empty() { continue; }
 
                 let resp: Value = client.post(format!("{}/api/agents/{}/message", api_base, agent_id))
                     .json(&json!({ "message": input }))
@@ -553,9 +563,9 @@ async fn main() -> Result<()> {
         }
 
         Commands::Dashboard => {
-            println!("{} Opening dashboard at http://localhost:3111/dashboard", "→".blue());
+            println!("{} Opening dashboard at {}/dashboard", "→".blue(), api_base);
             let _ = std::process::Command::new("open")
-                .arg("http://localhost:3111/dashboard")
+                .arg(format!("{}/dashboard", api_base))
                 .spawn();
         }
 

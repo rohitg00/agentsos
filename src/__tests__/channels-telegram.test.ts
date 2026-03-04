@@ -54,8 +54,6 @@ beforeEach(() => {
 });
 
 beforeAll(async () => {
-  process.env.TELEGRAM_BOT_TOKEN = "test-tg-token";
-  process.env.TELEGRAM_SECRET_TOKEN = "";
   await import("../channels/telegram.js");
 });
 
@@ -186,7 +184,6 @@ describe("channel::telegram::webhook", () => {
   });
 
   it("returns 401 when signature verification fails", async () => {
-    process.env.TELEGRAM_SECRET_TOKEN = "my-secret";
     const { verifyTelegramUpdate } = await import("../shared/utils.js");
     (verifyTelegramUpdate as any).mockReturnValue(false);
     const result = await call("channel::telegram::webhook", {
@@ -195,7 +192,25 @@ describe("channel::telegram::webhook", () => {
       },
     });
     expect(result.status_code).toBe(401);
-    process.env.TELEGRAM_SECRET_TOKEN = "";
     (verifyTelegramUpdate as any).mockReturnValue(true);
+  });
+
+  it("returns 401 when secret token is missing", async () => {
+    mockTrigger.mockImplementation(
+      async (fnId: string, data?: any): Promise<any> => {
+        if (fnId === "agent::chat") return { content: "Telegram reply" };
+        if (fnId === "vault::get" && data?.key === "TELEGRAM_SECRET_TOKEN")
+          return { value: "" };
+        if (fnId === "vault::get" && data?.key === "TELEGRAM_BOT_TOKEN")
+          return { value: "test-tg-token" };
+        return null;
+      },
+    );
+    const result = await call("channel::telegram::webhook", {
+      body: {
+        message: { text: "No secret", chat: { id: 456 }, from: { id: 10 } },
+      },
+    });
+    expect(result.status_code).toBe(401);
   });
 });

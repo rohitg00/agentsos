@@ -67,22 +67,29 @@ async function sendMessage(recipient: string, text: string, groupId?: string) {
   }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    const res = await fetch(`${apiUrl}/v2/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: chunk,
-        number: phone,
-        ...(groupId
-          ? { recipients: [], group_id: groupId }
-          : { recipients: [recipient] }),
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `Signal send failed (${res.status}): ${body.slice(0, 300)}`,
-      );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${apiUrl}/v2/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: chunk,
+          number: phone,
+          ...(groupId
+            ? { recipients: [], group_id: groupId }
+            : { recipients: [recipient] }),
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Signal send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

@@ -186,7 +186,9 @@ async function executeLlmCall(
       durationMs: Date.now() - llmStart,
       iteration,
     });
-  } catch {}
+  } catch (err: any) {
+    console.warn("replay::record failed", { agentId, error: err?.message });
+  }
 
   if (response.usage) {
     try {
@@ -199,7 +201,9 @@ async function executeLlmCall(
         cacheReadTokens: response.usage.cacheRead || 0,
         cacheWriteTokens: response.usage.cacheWrite || 0,
       });
-    } catch {}
+    } catch (err: any) {
+      console.warn("cost::track failed", { agentId, error: err?.message });
+    }
   }
 
   return response;
@@ -244,18 +248,22 @@ async function handleCodeAgent(
       executionTimeMs: 0,
     }));
 
-    triggerVoidFn("replay::record", {
-      sessionId: replaySessionId,
-      agentId,
-      action: "tool_call",
-      data: {
-        toolId: "code_execute",
-        code: block.slice(0, 500),
-        result: execResult.result,
-      },
-      durationMs: Date.now() - codeStart,
-      iteration: 0,
-    });
+    try {
+      triggerVoidFn("replay::record", {
+        sessionId: replaySessionId,
+        agentId,
+        action: "tool_call",
+        data: {
+          toolId: "code_execute",
+          code: block.slice(0, 500),
+          result: execResult.result,
+        },
+        durationMs: Date.now() - codeStart,
+        iteration: 0,
+      });
+    } catch (err: any) {
+      console.warn("replay::record failed", { agentId, error: err?.message });
+    }
 
     messages.push({ role: "assistant", content: currentResponse.content });
     messages.push({
@@ -390,11 +398,22 @@ async function executeToolCall(
       };
     }
 
-    await triggerFn("security::check_capability", {
-      agentId,
-      capability: tc.id.split("::")[0],
-      resource: tc.id,
-    });
+    const capResult: any = await safeCall(
+      () =>
+        triggerFn("security::check_capability", {
+          agentId,
+          capability: tc.id.split("::")[0],
+          resource: tc.id,
+        }),
+      { decision: "block" },
+      { agentId, operation: "check_capability" },
+    );
+    if (capResult.decision === "block") {
+      return {
+        toolCallId: tc.callId,
+        output: { error: `Tool ${tc.id} blocked by capability check` },
+      };
+    }
 
     const result = await triggerFn(tc.id, tc.arguments, TOOL_TIMEOUT_MS);
 
@@ -596,55 +615,61 @@ function recordChatResult(
   chatStart: number,
   triggerVoidFn: TriggerVoidFn,
 ): ChatResponse {
-  triggerVoidFn("hook::fire", {
-    type: "AgentLoopEnd",
-    agentId,
-    iterations,
-  });
-  triggerVoidFn("guard::reset", { agentId });
+  try {
+    triggerVoidFn("hook::fire", {
+      type: "AgentLoopEnd",
+      agentId,
+      iterations,
+    });
+    triggerVoidFn("guard::reset", { agentId });
+  } catch {}
 
-  triggerVoidFn("memory::store", {
-    agentId,
-    sessionId: replaySessionId,
-    role: "user",
-    content: message,
-  });
-  if (response.content) {
+  try {
     triggerVoidFn("memory::store", {
       agentId,
       sessionId: replaySessionId,
-      role: "assistant",
-      content: response.content,
-      tokenUsage: response.usage,
+      role: "user",
+      content: message,
     });
-  }
+    if (response.content) {
+      triggerVoidFn("memory::store", {
+        agentId,
+        sessionId: replaySessionId,
+        role: "assistant",
+        content: response.content,
+        tokenUsage: response.usage,
+      });
+    }
+  } catch {}
 
-  triggerVoidFn("state::update", {
-    scope: "metering",
-    key: agentId,
-    operations: [
-      {
-        type: "increment",
-        path: "totalTokens",
-        value: response.usage?.total || 0,
-      },
-      { type: "increment", path: "invocations", value: 1 },
-    ],
-  });
+  try {
+    triggerVoidFn("state::update", {
+      scope: "metering",
+      key: agentId,
+      operations: [
+        {
+          type: "increment",
+          path: "totalTokens",
+          value: response.usage?.total || 0,
+        },
+        { type: "increment", path: "invocations", value: 1 },
+      ],
+    });
 
-  const hourKey = new Date().toISOString().slice(0, 13);
-  triggerVoidFn("state::update", {
-    scope: "metering_hourly",
-    key: `${agentId}:${hourKey}`,
-    operations: [
-      {
-        type: "increment",
-        path: "tokens",
-        value: response.usage?.total || 0,
-      },
-      { type: "increment", path: "invocations", value: 1 },
-    ],
-  });
+    const hourKey = new Date().toISOString().slice(0, 13);
+    triggerVoidFn("state::update", {
+      scope: "metering_hourly",
+      key: `${agentId}:${hourKey}`,
+      operations: [
+        {
+          type: "increment",
+          path: "tokens",
+          value: response.usage?.total || 0,
+        },
+        { type: "increment", path: "invocations", value: 1 },
+      ],
+    });
+  } catch {}
 
   const chatDuration = Date.now() - chatStart;
   const resolvedModel = response.model || "unknown";

@@ -83,20 +83,29 @@ async function sendMessage(recipientId: string, text: string) {
   }
   const chunks = splitMessage(text, 2000);
   for (const chunk of chunks) {
-    const params = new URLSearchParams({ access_token: pageToken });
-    const res = await fetch(`${API_URL}?${params}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        recipient: { id: recipientId },
-        message: { text: chunk },
-      }),
-    });
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `Messenger send failed (${res.status}): ${body.slice(0, 300)}`,
-      );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const res = await fetch(API_URL, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${pageToken}`,
+        },
+        body: JSON.stringify({
+          recipient: { id: recipientId },
+          message: { text: chunk },
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Messenger send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 }

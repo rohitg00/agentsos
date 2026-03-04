@@ -80,11 +80,14 @@ async function refreshTenantToken(): Promise<string> {
   if (!appSecret) {
     throw new Error("FEISHU_APP_SECRET not configured");
   }
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15_000);
   try {
     const res = await fetch(`${API_URL}/auth/v3/tenant_access_token/internal`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ app_id: appId, app_secret: appSecret }),
+      signal: controller.signal,
     });
     if (!res.ok) {
       const body = await res.text().catch(() => "");
@@ -112,6 +115,8 @@ async function refreshTenantToken(): Promise<string> {
     tenantToken = "";
     tenantTokenExpiry = 0;
     throw err;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -119,32 +124,39 @@ async function sendMessage(chatId: string, text: string) {
   const token = await getTenantToken();
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    const res = await fetch(
-      `${API_URL}/im/v1/messages?receive_id_type=chat_id`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const res = await fetch(
+        `${API_URL}/im/v1/messages?receive_id_type=chat_id`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            receive_id: chatId,
+            msg_type: "text",
+            content: JSON.stringify({ text: chunk }),
+          }),
+          signal: controller.signal,
         },
-        body: JSON.stringify({
-          receive_id: chatId,
-          msg_type: "text",
-          content: JSON.stringify({ text: chunk }),
-        }),
-      },
-    );
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
-      throw new Error(
-        `Feishu send failed (${res.status}): ${body.slice(0, 300)}`,
       );
-    }
-    const resData = (await res.json()) as { code?: number; msg?: string };
-    if (resData.code !== 0) {
-      throw new Error(
-        `Feishu send API error (code=${resData.code}): ${resData.msg || "unknown"}`,
-      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Feishu send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+      const resData = (await res.json()) as { code?: number; msg?: string };
+      if (resData.code !== 0) {
+        throw new Error(
+          `Feishu send API error (code=${resData.code}): ${resData.msg || "unknown"}`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
     }
   }
 }
