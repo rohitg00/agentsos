@@ -1,4 +1,5 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL } from "./shared/config.js";
 import { spawn, type ChildProcess } from "child_process";
 import {
   validateMcpCommand,
@@ -7,7 +8,7 @@ import {
 } from "./shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "mcp-client" },
 );
 
@@ -168,7 +169,7 @@ registerFunction(
     const initResult = (await sendRpc(conn, "initialize", {
       protocolVersion: "2024-11-05",
       capabilities: { tools: {} },
-      clientInfo: { name: "agentsos", version: "0.1.0" },
+      clientInfo: { name: "agentos", version: "0.0.1" },
     })) as any;
 
     conn.capabilities = initResult?.capabilities || {};
@@ -327,7 +328,7 @@ registerFunction(
 registerFunction(
   {
     id: "mcp::serve",
-    description: "Register agentsos as an MCP server exposing agent functions",
+    description: "Register agentos as an MCP server exposing agent functions",
     metadata: { category: "mcp" },
   },
   async (req: any) => {
@@ -351,7 +352,7 @@ registerFunction(
             result: {
               protocolVersion: "2024-11-05",
               capabilities: { tools: {} },
-              serverInfo: { name: "agentsos", version: "0.1.0" },
+              serverInfo: { name: "agentos", version: "0.0.1" },
             },
           };
         }

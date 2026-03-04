@@ -1,14 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-zulip" },
 );
-
-const EMAIL = process.env.ZULIP_EMAIL || "";
-const API_KEY = process.env.ZULIP_API_KEY || "";
-const SITE = process.env.ZULIP_SITE || "";
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   { id: "channel::zulip::webhook", description: "Handle Zulip bot webhook" },
@@ -54,7 +52,19 @@ async function sendMessage(
   topic: string,
   content: string,
 ) {
-  const auth = Buffer.from(`${EMAIL}:${API_KEY}`).toString("base64");
+  const email = await getSecret("ZULIP_EMAIL");
+  if (!email) {
+    throw new Error("ZULIP_EMAIL not configured");
+  }
+  const apiKey = await getSecret("ZULIP_API_KEY");
+  if (!apiKey) {
+    throw new Error("ZULIP_API_KEY not configured");
+  }
+  const site = await getSecret("ZULIP_SITE");
+  if (!site) {
+    throw new Error("ZULIP_SITE not configured");
+  }
+  const auth = Buffer.from(`${email}:${apiKey}`).toString("base64");
   const chunks = splitMessage(content, 10000);
   for (const chunk of chunks) {
     const params = new URLSearchParams({
@@ -63,7 +73,7 @@ async function sendMessage(
       topic,
       content: chunk,
     });
-    await fetch(`${SITE}/api/v1/messages`, {
+    await fetch(`${site}/api/v1/messages`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${auth}`,

@@ -1,14 +1,14 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { createHmac } from "crypto";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-dingtalk" },
 );
+const getSecret = createSecretGetter(trigger);
 
-const TOKEN = process.env.DINGTALK_TOKEN || "";
-const SECRET = process.env.DINGTALK_SECRET || "";
 const API_URL = "https://oapi.dingtalk.com/robot/send";
 
 registerFunction(
@@ -31,6 +31,9 @@ registerFunction(
       sessionId: `dingtalk:${conversationId}`,
     });
 
+    if (!response?.content) {
+      return { status_code: 200, body: { ok: true } };
+    }
     await sendMessage(response.content);
 
     triggerVoid("security::audit", {
@@ -50,19 +53,40 @@ registerTrigger({
 });
 
 async function sendMessage(text: string) {
+  const token = await getSecret("DINGTALK_TOKEN");
+  if (!token) {
+    throw new Error("DINGTALK_TOKEN not configured");
+  }
+  const secret = await getSecret("DINGTALK_SECRET");
+  if (!secret) {
+    throw new Error("DINGTALK_SECRET not configured");
+  }
   const timestamp = Date.now();
-  const sign = createHmac("sha256", SECRET)
-    .update(`${timestamp}\n${SECRET}`)
+  const sign = createHmac("sha256", secret)
+    .update(`${timestamp}\n${secret}`)
     .digest("base64");
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(
-      `${API_URL}?access_token=${TOKEN}&timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ msgtype: "text", text: { content: chunk } }),
-      },
-    );
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(
+        `${API_URL}?access_token=${encodeURIComponent(token)}&timestamp=${timestamp}&sign=${encodeURIComponent(sign)}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ msgtype: "text", text: { content: chunk } }),
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `DingTalk send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

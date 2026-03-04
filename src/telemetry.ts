@@ -1,12 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL } from "./shared/config.js";
 import { createLogger } from "./shared/logger.js";
 
 const log = createLogger("telemetry");
 
-const { registerFunction, registerTrigger, trigger } = init(
-  "ws://localhost:49134",
-  { workerName: "telemetry" },
-);
+const { registerFunction, registerTrigger, trigger } = init(ENGINE_URL, {
+  workerName: "telemetry",
+});
 
 interface MetricEvent {
   name: string;
@@ -184,7 +184,7 @@ registerFunction(
 
     const sections: string[] = [];
 
-    sections.push("=== AgentSOS Metrics Dashboard ===\n");
+    sections.push("=== AgentOS Metrics Dashboard ===\n");
 
     if (Object.keys(summary.counters).length > 0) {
       sections.push("-- Counters --");

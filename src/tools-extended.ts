@@ -1,4 +1,9 @@
 import { init } from "iii-sdk";
+import {
+  ENGINE_URL,
+  WORKSPACE_ROOT,
+  assertPathContained,
+} from "./shared/config.js";
 import { readFile } from "fs/promises";
 import { realpathSync } from "node:fs";
 import path, { resolve, relative } from "path";
@@ -12,11 +17,9 @@ import { safeCall } from "./shared/errors.js";
 const execFileAsync = promisify(execFile);
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "tools-extended" },
 );
-
-const WORKSPACE_ROOT = process.env.AGENTSOS_WORKSPACE || process.cwd();
 
 const TAINT_ENV_ALLOWLIST = new Set([
   "PATH",
@@ -28,20 +31,6 @@ const TAINT_ENV_ALLOWLIST = new Set([
   "SHELL",
   "LC_ALL",
 ]);
-
-function assertPathContained(resolved: string) {
-  let real: string;
-  try {
-    real = realpathSync(resolved);
-  } catch {
-    real = resolved;
-  }
-  const workspaceReal = realpathSync(WORKSPACE_ROOT);
-  const rel = relative(workspaceReal, real);
-  if (rel.startsWith("..") || path.isAbsolute(rel)) {
-    throw new Error(`Path traversal denied: ${resolved}`);
-  }
-}
 
 function safeEnv(): Record<string, string> {
   const env: Record<string, string> = {};
@@ -366,8 +355,12 @@ registerFunction(
     try {
       const resp = await fetch(url, {
         signal: controller.signal,
-        headers: { "User-Agent": "agentsos/0.1" },
+        headers: { "User-Agent": "AgentOS/0.0.1" },
       });
+
+      if (!resp.ok) {
+        return { downloaded: false, error: "HTTP " + resp.status };
+      }
 
       const contentLength = parseInt(resp.headers.get("content-length") || "0");
       const limit = maxSize || 50_000_000;
@@ -1828,7 +1821,7 @@ registerFunction(
     retries?: number;
   }) => {
     if (!url) throw new Error("url is required");
-    assertNoSsrf(url);
+    await assertNoSsrf(url);
 
     const httpMethod = (method || "GET").toUpperCase();
     const timeoutMs = Math.min(timeout || 30000, 60000);
@@ -1840,42 +1833,45 @@ registerFunction(
         const controller = new AbortController();
         const timer = setTimeout(() => controller.abort(), timeoutMs);
 
-        const opts: RequestInit = {
-          method: httpMethod,
-          headers: {
-            "User-Agent": "AgentSOS/1.0",
-            ...(headers || {}),
-          },
-          signal: controller.signal,
-        };
+        try {
+          const opts: RequestInit = {
+            method: httpMethod,
+            headers: {
+              "User-Agent": "AgentOS/0.0.1",
+              ...(headers || {}),
+            },
+            signal: controller.signal,
+          };
 
-        if (body && httpMethod !== "GET" && httpMethod !== "HEAD") {
-          opts.body = typeof body === "string" ? body : JSON.stringify(body);
-          if (!headers?.["Content-Type"]) {
-            (opts.headers as Record<string, string>)["Content-Type"] =
-              "application/json";
+          if (body && httpMethod !== "GET" && httpMethod !== "HEAD") {
+            opts.body = typeof body === "string" ? body : JSON.stringify(body);
+            if (!headers?.["Content-Type"]) {
+              (opts.headers as Record<string, string>)["Content-Type"] =
+                "application/json";
+            }
           }
+
+          const response = await fetch(url, opts);
+
+          const contentType = response.headers.get("content-type") || "";
+          let responseBody: unknown;
+          if (contentType.includes("application/json")) {
+            responseBody = await response.json();
+          } else {
+            const text = await response.text();
+            responseBody = text.slice(0, 100000);
+          }
+
+          return {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+            body: responseBody,
+            attempt: attempt + 1,
+          };
+        } finally {
+          clearTimeout(timer);
         }
-
-        const response = await fetch(url, opts);
-        clearTimeout(timer);
-
-        const contentType = response.headers.get("content-type") || "";
-        let responseBody: unknown;
-        if (contentType.includes("application/json")) {
-          responseBody = await response.json();
-        } else {
-          const text = await response.text();
-          responseBody = text.slice(0, 100000);
-        }
-
-        return {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: responseBody,
-          attempt: attempt + 1,
-        };
       } catch (e: any) {
         lastError = e.message;
         if (attempt < maxRetries) {

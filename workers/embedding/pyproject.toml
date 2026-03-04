@@ -1,6 +1,6 @@
 [project]
-name = "agentsos-embedding"
-version = "0.1.0"
+name = "agentos-embedding"
+version = "0.0.1"
 requires-python = ">=3.11"
 dependencies = [
     "iii-sdk>=0.3.0",

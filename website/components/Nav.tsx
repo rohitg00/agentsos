@@ -36,6 +36,7 @@ export default function Nav() {
   }, []);
 
   useEffect(() => {
+    setScrolled(window.scrollY > 20);
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
@@ -75,7 +76,7 @@ export default function Nav() {
 
           <div className="hidden lg:flex items-center gap-3 shrink-0">
             <a
-              href="https://github.com/rohitg00/agentsos"
+              href="https://github.com/rohitg00/agentos"
               target="_blank"
               rel="noopener noreferrer"
               aria-label="GitHub repository"
@@ -113,6 +114,7 @@ export default function Nav() {
           id="mobile-menu"
           role="region"
           aria-hidden={!mobileOpen}
+          {...(!mobileOpen ? { inert: true } : {})}
           className={`lg:hidden overflow-hidden transition-all duration-200 ease-in-out ${
             mobileOpen ? "max-h-[500px] opacity-100 pb-4" : "max-h-0 opacity-0"
           }`}
@@ -134,7 +136,7 @@ export default function Nav() {
             ))}
             <div className="flex items-center gap-3 mt-3 pt-3 border-t border-white/6">
               <a
-                href="https://github.com/rohitg00/agentsos"
+                href="https://github.com/rohitg00/agentos"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="GitHub repository"

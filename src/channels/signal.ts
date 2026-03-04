@@ -1,13 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-signal" },
 );
-
-const API_URL = process.env.SIGNAL_API_URL || "";
-const PHONE = process.env.SIGNAL_PHONE || "";
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   {
@@ -34,6 +33,11 @@ registerFunction(
       sessionId: `signal:${channelKey}`,
     });
 
+    if (!response?.content) {
+      console.warn("signal: agent returned empty response", { channelKey });
+      return { status_code: 500, body: { error: "Empty agent response" } };
+    }
+
     await sendMessage(source, response.content, groupId);
 
     triggerVoid("security::audit", {
@@ -53,18 +57,39 @@ registerTrigger({
 });
 
 async function sendMessage(recipient: string, text: string, groupId?: string) {
+  const apiUrl = await getSecret("SIGNAL_API_URL");
+  if (!apiUrl) {
+    throw new Error("SIGNAL_API_URL not configured");
+  }
+  const phone = await getSecret("SIGNAL_PHONE");
+  if (!phone) {
+    throw new Error("SIGNAL_PHONE not configured");
+  }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}/v2/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        message: chunk,
-        number: PHONE,
-        ...(groupId
-          ? { recipients: [], group_id: groupId }
-          : { recipients: [recipient] }),
-      }),
-    });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${apiUrl}/v2/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: chunk,
+          number: phone,
+          ...(groupId
+            ? { recipients: [], group_id: groupId }
+            : { recipients: [recipient] }),
+        }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Signal send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timer);
+    }
   }
 }

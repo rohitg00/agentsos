@@ -1,12 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-pumble" },
 );
-
-const TOKEN = process.env.PUMBLE_TOKEN || "";
+const getSecret = createSecretGetter(trigger);
 const API_URL = "https://api.pumble.com/v1";
 
 registerFunction(
@@ -53,15 +53,25 @@ registerTrigger({
 });
 
 async function sendMessage(channelId: string, text: string) {
+  const token = await getSecret("PUMBLE_TOKEN");
+  if (!token) {
+    throw new Error("PUMBLE_TOKEN not configured");
+  }
   const chunks = splitMessage(text, 4000);
   for (const chunk of chunks) {
-    await fetch(`${API_URL}/messages`, {
+    const res = await fetch(`${API_URL}/messages`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${TOKEN}`,
+        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ channel: channelId, text: chunk }),
     });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Pumble send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

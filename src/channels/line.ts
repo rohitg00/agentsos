@@ -1,12 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-line" },
 );
-
-const TOKEN = process.env.LINE_CHANNEL_TOKEN || "";
+const getSecret = createSecretGetter(trigger);
 const API_URL = "https://api.line.me/v2/bot/message";
 
 registerFunction(
@@ -53,16 +53,33 @@ registerTrigger({
 });
 
 async function sendMessage(replyToken: string, text: string) {
+  const token = await getSecret("LINE_CHANNEL_TOKEN");
+  if (!token) {
+    throw new Error("LINE_CHANNEL_TOKEN not configured");
+  }
   const chunks = splitMessage(text, 5000);
   const messages = chunks
     .slice(0, 5)
     .map((chunk) => ({ type: "text", text: chunk }));
-  await fetch(`${API_URL}/reply`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${TOKEN}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ replyToken, messages }),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const res = await fetch(`${API_URL}/reply`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ replyToken, messages }),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `LINE send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }

@@ -1,14 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-xmpp" },
 );
-
-const JID = process.env.XMPP_JID || "";
-const PASSWORD = process.env.XMPP_PASSWORD || "";
-const BRIDGE_URL = process.env.XMPP_BRIDGE_URL || "http://localhost:5280";
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   {
@@ -18,8 +16,12 @@ registerFunction(
   async (req) => {
     const body = req.body || req;
     const { from, to, body: text, type } = body;
+    const jid = await getSecret("XMPP_JID");
+    if (!jid) {
+      return { status_code: 500, body: { error: "XMPP_JID not configured" } };
+    }
 
-    if (!text || from === JID) return { status_code: 200, body: { ok: true } };
+    if (!text || from === jid) return { status_code: 200, body: { ok: true } };
 
     const channelKey = type === "groupchat" ? to : from;
     const agentId = await resolveAgent(trigger, "xmpp", channelKey);
@@ -49,17 +51,30 @@ registerTrigger({
 });
 
 async function sendMessage(to: string, text: string, type: string) {
+  const bridgeUrl =
+    (await getSecret("XMPP_BRIDGE_URL")) || "http://localhost:5280";
+  const jid = await getSecret("XMPP_JID");
+  if (!jid) {
+    throw new Error("XMPP_JID secret not configured");
+  }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${BRIDGE_URL}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: JID,
-        to,
-        body: chunk,
-        type: type || "chat",
-      }),
-    });
+    try {
+      const res = await fetch(`${bridgeUrl}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          from: jid,
+          to,
+          body: chunk,
+          type: type || "chat",
+        }),
+      });
+      if (!res.ok) {
+        console.error(`XMPP send failed: ${res.status}`);
+      }
+    } catch (err: any) {
+      console.error(`XMPP send error: ${err.message}`);
+    }
   }
 }

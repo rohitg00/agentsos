@@ -12,8 +12,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-cli"
-version = "0.1.0"
+name = "agentos-cli"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -34,8 +34,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-core"
-version = "0.1.0"
+name = "agentos-core"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "iii-sdk",
@@ -48,8 +48,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-llm-router"
-version = "0.1.0"
+name = "agentos-llm-router"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -63,8 +63,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-memory"
-version = "0.1.0"
+name = "agentos-memory"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "iii-sdk",
@@ -78,8 +78,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-security"
-version = "0.1.0"
+name = "agentos-security"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "dashmap",
@@ -98,8 +98,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-tui"
-version = "0.1.0"
+name = "agentos-tui"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "crossterm",
@@ -112,8 +112,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentsos-wasm-sandbox"
-version = "0.1.0"
+name = "agentos-wasm-sandbox"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "dashmap",

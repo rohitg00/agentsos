@@ -1,13 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-nextcloud" },
 );
-
-const BASE_URL = process.env.NEXTCLOUD_URL || "";
-const TOKEN = process.env.NEXTCLOUD_TOKEN || "";
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   {
@@ -47,16 +46,34 @@ registerTrigger({
 });
 
 async function sendMessage(roomToken: string, text: string) {
+  const token = (await getSecret("NEXTCLOUD_TOKEN")).trim();
+  if (!token) {
+    throw new Error("NEXTCLOUD_TOKEN not configured");
+  }
+  const baseUrl = (await getSecret("NEXTCLOUD_URL")).trim();
+  if (!baseUrl) {
+    throw new Error("NEXTCLOUD_URL not configured");
+  }
+  const normalizedUrl = baseUrl.replace(/\/+$/, "");
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${BASE_URL}/ocs/v2.php/apps/spreed/api/v1/chat/${roomToken}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${TOKEN}`,
-        "Content-Type": "application/json",
-        "OCS-APIRequest": "true",
+    const res = await fetch(
+      `${normalizedUrl}/ocs/v2.php/apps/spreed/api/v1/chat/${encodeURIComponent(roomToken)}`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          "OCS-APIRequest": "true",
+        },
+        body: JSON.stringify({ message: chunk }),
       },
-      body: JSON.stringify({ message: chunk }),
-    });
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      throw new Error(
+        `Nextcloud send failed (${res.status}): ${body.slice(0, 300)}`,
+      );
+    }
   }
 }

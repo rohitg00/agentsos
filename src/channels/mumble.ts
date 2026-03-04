@@ -1,14 +1,12 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-mumble" },
 );
-
-const SERVER = process.env.MUMBLE_SERVER || "";
-const PASSWORD = process.env.MUMBLE_PASSWORD || "";
-const BRIDGE_URL = process.env.MUMBLE_BRIDGE_URL || "http://localhost:6502";
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   {
@@ -49,12 +47,29 @@ registerTrigger({
 });
 
 async function sendMessage(channel: string, text: string) {
+  const bridgeUrl = await getSecret("MUMBLE_BRIDGE_URL");
+  if (!bridgeUrl) {
+    throw new Error("MUMBLE_BRIDGE_URL not configured");
+  }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${BRIDGE_URL}/send`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ channel, message: chunk }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(`${bridgeUrl}/send`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ channel, message: chunk }),
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Mumble send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }

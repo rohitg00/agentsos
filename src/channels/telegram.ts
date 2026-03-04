@@ -1,4 +1,5 @@
 import { init } from "iii-sdk";
+import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
 import {
   splitMessage,
   resolveAgent,
@@ -6,19 +7,20 @@ import {
 } from "../shared/utils.js";
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  "ws://localhost:49134",
+  ENGINE_URL,
   { workerName: "channel-telegram" },
 );
-
-const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || "";
-const TELEGRAM_API = `https://api.telegram.org/bot${BOT_TOKEN}`;
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   { id: "channel::telegram::webhook", description: "Handle Telegram webhook" },
   async (req) => {
-    const secretToken = process.env.TELEGRAM_SECRET_TOKEN || "";
-    if (secretToken && !verifyTelegramUpdate(secretToken, req)) {
-      return { status_code: 401, body: { error: "Invalid webhook signature" } };
+    const secretToken = await getSecret("TELEGRAM_SECRET_TOKEN");
+    if (!secretToken || !verifyTelegramUpdate(secretToken, req)) {
+      return {
+        status_code: 401,
+        body: { error: "Missing or invalid webhook signature" },
+      };
     }
 
     const update = req.body || req;
@@ -57,16 +59,36 @@ registerTrigger({
 });
 
 async function sendMessage(chatId: number, text: string) {
+  const botToken = await getSecret("TELEGRAM_BOT_TOKEN");
+  if (!botToken) {
+    throw new Error("TELEGRAM_BOT_TOKEN not configured");
+  }
   const chunks = splitMessage(text, 4096);
   for (const chunk of chunks) {
-    await fetch(`${TELEGRAM_API}/sendMessage`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: chunk,
-        parse_mode: "Markdown",
-      }),
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch(
+        `https://api.telegram.org/bot${botToken}/sendMessage`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: chunk,
+            parse_mode: "Markdown",
+          }),
+          signal: controller.signal,
+        },
+      );
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(
+          `Telegram send failed (${res.status}): ${body.slice(0, 300)}`,
+        );
+      }
+    } finally {
+      clearTimeout(timeoutId);
+    }
   }
 }
