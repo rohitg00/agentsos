@@ -437,7 +437,7 @@ agentos/
 ├── workers/                Python workers
 │   └── embedding/          Text embeddings
 │
-├── agents/                 30 agent templates
+├── agents/                 45 agent templates
 ├── hands/                  7 autonomous hands
 ├── integrations/           25 MCP integrations
 └── identity/               System identity files

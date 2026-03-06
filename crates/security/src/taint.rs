@@ -500,6 +500,9 @@ mod tests {
         assert_eq!(serialized["value"]["nested"][1], 2);
         let labels = serialized["taints"]["labels"].as_array().unwrap();
         assert_eq!(labels.len(), 1);
+        let deserialized: TaintedValue<Value> = serde_json::from_value(serialized).unwrap();
+        assert_eq!(deserialized.value, data);
+        assert!(deserialized.taints.check(&TaintLabel::UserInput));
     }
 
     #[test]

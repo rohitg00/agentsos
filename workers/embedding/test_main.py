@@ -646,6 +646,7 @@ class TestComputeSimilarityEdgeCases:
         b = [1.0, 2.0, 3.0]
         result = _run(mod.compute_similarity({"a": a, "b": b}))
         assert isinstance(result["similarity"], float)
+        assert math.isnan(result["similarity"])
 
     def test_all_same_values_vectors(self):
         a = [5.0] * 10

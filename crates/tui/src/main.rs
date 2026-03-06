@@ -1268,14 +1268,19 @@ fn status_cell(status: &str) -> Span<'_> {
 }
 
 fn truncate(s: &str, max: usize) -> String {
-    let char_count = s.chars().count();
-    if char_count > max {
-        let take = max.saturating_sub(3);
-        let truncated: String = s.chars().take(take).collect();
-        format!("{}...", truncated)
-    } else {
-        s.to_string()
+    if max == 0 {
+        return String::new();
     }
+    let char_count = s.chars().count();
+    if char_count <= max {
+        return s.to_string();
+    }
+    if max < 3 {
+        return s.chars().take(max).collect();
+    }
+    let take = max - 3;
+    let truncated: String = s.chars().take(take).collect();
+    format!("{}...", truncated)
 }
 
 #[cfg(test)]
@@ -1615,7 +1620,7 @@ mod tests {
     #[test]
     fn test_truncate_zero_max() {
         let result = truncate("hello", 0);
-        assert_eq!(result, "...");
+        assert_eq!(result, "");
     }
 
     #[test]

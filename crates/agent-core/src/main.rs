@@ -277,15 +277,23 @@ async fn list_tools(iii: &III, agent_id: &str) -> Result<Value, IIIError> {
         .map(|c| c.tools.clone())
         .unwrap_or_else(|| vec!["*".into()]);
 
-    let allowed: Vec<String> = allowed.into_iter().filter(|s| !s.trim().is_empty()).collect();
+    let allowed: Vec<String> = allowed
+        .into_iter()
+        .filter(|s| !s.trim().is_empty())
+        .map(|s| s.trim_end_matches('*').to_string())
+        .collect();
 
     let all_functions: Value = iii
         .trigger("engine::functions::list", json!({}))
         .await
         .unwrap_or(json!([]));
 
-    if allowed.is_empty() || allowed.contains(&"*".to_string()) {
+    if allowed.contains(&"".to_string()) || allowed.contains(&"*".to_string()) {
         return Ok(all_functions);
+    }
+
+    if allowed.is_empty() {
+        return Ok(json!([]));
     }
 
     let filtered: Vec<&Value> = all_functions

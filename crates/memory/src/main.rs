@@ -755,6 +755,9 @@ fn estimate_importance(content: &str, role: &str) -> f64 {
 }
 
 fn chunk_text(text: &str, max_chars: usize) -> Vec<String> {
+    if max_chars == 0 {
+        return vec![];
+    }
     if text.chars().count() <= max_chars {
         return vec![text.to_string()];
     }

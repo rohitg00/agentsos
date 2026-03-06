@@ -589,7 +589,8 @@ mod tests {
     #[tokio::test]
     async fn test_docker_exec_single_command() {
         let input = json!({"command": ["ls"]});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("not allowed"));
     }
 
     #[test]
