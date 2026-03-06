@@ -34,6 +34,7 @@ mod docker_sandbox;
 
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct AuditEntry {
     id: String,
     timestamp: u64,
@@ -500,7 +501,7 @@ mod tests {
         assert_eq!(serialized["timestamp"], 1234567890);
         assert_eq!(serialized["type"], "test");
         assert_eq!(serialized["hash"], "abc123");
-        assert_eq!(serialized["prev_hash"], "000");
+        assert_eq!(serialized["prevHash"], "000");
     }
 
     #[test]
@@ -509,10 +510,10 @@ mod tests {
             "id": "entry-1",
             "timestamp": 9999,
             "type": "capability_denied",
-            "agent_id": "agent-x",
+            "agentId": "agent-x",
             "detail": { "resource": "file::write" },
             "hash": "h1",
-            "prev_hash": "h0",
+            "prevHash": "h0",
         });
         let entry: AuditEntry = serde_json::from_value(json_val).unwrap();
         assert_eq!(entry.id, "entry-1");
@@ -526,10 +527,10 @@ mod tests {
             "id": "entry-2",
             "timestamp": 1000,
             "type": "system_event",
-            "agent_id": null,
+            "agentId": null,
             "detail": {},
             "hash": "abc",
-            "prev_hash": "def",
+            "prevHash": "def",
         });
         let entry: AuditEntry = serde_json::from_value(json_val).unwrap();
         assert_eq!(entry.agent_id, None);
@@ -783,7 +784,7 @@ mod tests {
             prev_hash: "ph".to_string(),
         };
         let serialized = serde_json::to_value(&entry).unwrap();
-        assert!(serialized["agent_id"].is_null());
+        assert!(serialized["agentId"].is_null());
     }
 
     #[test]

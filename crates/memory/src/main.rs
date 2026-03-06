@@ -1286,6 +1286,24 @@ mod tests {
     }
 
     #[test]
+    fn test_chunk_text_cjk_split_at_one() {
+        let text = "\u{4e16}\u{754c}\u{4f60}\u{597d}";
+        let chunks = chunk_text(text, 1);
+        assert_eq!(chunks.len(), 4);
+        let rejoined: String = chunks.join("");
+        assert_eq!(rejoined, text);
+    }
+
+    #[test]
+    fn test_chunk_text_emoji_split_at_one() {
+        let text = "\u{1f600}\u{1f680}\u{1f4a1}";
+        let chunks = chunk_text(text, 1);
+        assert_eq!(chunks.len(), 3);
+        let rejoined: String = chunks.join("");
+        assert_eq!(rejoined, text);
+    }
+
+    #[test]
     fn test_chunk_text_only_newlines() {
         let text = "\n\n\n\n\n";
         let chunks = chunk_text(text, 3);

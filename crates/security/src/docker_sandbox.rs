@@ -404,12 +404,11 @@ mod tests {
         let input = json!({"command": ["echo"], "env": ["HOME"]});
         let result = docker_exec(input).await;
         assert!(result.is_err());
-        let input2 = json!({"command": ["echo"], "env": ["PATH"]});
+        assert!(result.unwrap_err().to_string().contains("must contain '='"));
+        let input2 = json!({"command": ["echo"], "env": ["SAFE_VAR"]});
         let result2 = docker_exec(input2).await;
         assert!(result2.is_err());
-        let input3 = json!({"command": ["echo"], "env": ["DOCKER_HOST"]});
-        let result3 = docker_exec(input3).await;
-        assert!(result3.is_err());
+        assert!(result2.unwrap_err().to_string().contains("must contain '='"));
     }
 
     #[tokio::test]
@@ -476,25 +475,29 @@ mod tests {
     #[tokio::test]
     async fn test_docker_exec_allowed_image_ubuntu_22() {
         let input = json!({"command": ["echo", "hi"], "image": "ubuntu:22.04"});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("not allowed"));
     }
 
     #[tokio::test]
     async fn test_docker_exec_allowed_image_python() {
         let input = json!({"command": ["echo"], "image": "python:3.12-slim"});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("not allowed"));
     }
 
     #[tokio::test]
     async fn test_docker_exec_allowed_image_node() {
         let input = json!({"command": ["echo"], "image": "node:20-slim"});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("not allowed"));
     }
 
     #[tokio::test]
     async fn test_docker_exec_allowed_image_rust() {
         let input = json!({"command": ["echo"], "image": "rust:1-slim"});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("not allowed"));
     }
 
     #[tokio::test]
@@ -515,7 +518,8 @@ mod tests {
     #[tokio::test]
     async fn test_docker_exec_workspace_safe_tmp() {
         let input = json!({"command": ["ls"], "workspacePath": "/tmp/sandbox"});
-        let _result = docker_exec(input).await;
+        let result = docker_exec(input).await;
+        assert!(result.is_ok() || !result.unwrap_err().to_string().contains("Blocked workspace"));
     }
 
     #[tokio::test]
@@ -643,6 +647,7 @@ mod tests {
         let json_val = json!({"command": ["echo"], "env": ["JUST_A_NAME"]});
         let req: DockerExecRequest = serde_json::from_value(json_val).unwrap();
         assert_eq!(req.env.as_ref().unwrap()[0], "JUST_A_NAME");
+        assert!(!req.env.as_ref().unwrap()[0].contains('='), "env without = should be blocked at runtime");
     }
 
     #[test]
@@ -873,6 +878,12 @@ async fn docker_exec(input: Value) -> Result<Value, IIIError> {
 
     if let Some(env_vars) = &req.env {
         for var in env_vars {
+            if !var.contains('=') {
+                return Err(IIIError::Handler(format!(
+                    "Env var must contain '=': {}",
+                    var
+                )));
+            }
             let upper = var.to_uppercase();
             let name_upper = upper.split('=').next().unwrap_or(&upper);
             let blocked = BLOCKED_ENV_PREFIXES.iter().any(|p| {

@@ -31,13 +31,17 @@ import pytest
 
 @pytest.fixture(autouse=True)
 def _reset_model():
+    saved = sys.modules.get("sentence_transformers")
+    sys.modules.pop("sentence_transformers", None)
     mod.model = None
     yield
     mod.model = None
+    if saved is not None:
+        sys.modules["sentence_transformers"] = saved
 
 
 def _run(coro):
-    return asyncio.get_event_loop().run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ===========================================================================
@@ -503,10 +507,12 @@ class TestGetModelEdgeCases:
 
     def test_concurrent_model_access(self):
         mod.model = None
-        results = []
-        async def access():
-            results.append(mod.get_model())
-        _run(asyncio.gather(access(), access(), access()))
+        async def run_concurrent():
+            async def access():
+                return await asyncio.to_thread(mod.get_model)
+            results = await asyncio.gather(access(), access(), access())
+            return list(results)
+        results = _run(run_concurrent())
         assert all(r == "fallback" for r in results)
         assert len(results) == 3
 

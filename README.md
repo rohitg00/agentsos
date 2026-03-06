@@ -2,7 +2,7 @@
 
 Agent Operating System built on three primitives: **Worker**, **Function**, **Trigger**.
 
-**60+ tools** · **2,419 tests** · **25 LLM providers** · **47 models** · **40 channels** · **28K LOC**
+**60+ tools** · **2,506 tests** · **25 LLM providers** · **47 models** · **40 channels** · **28K LOC**
 
 Every capability — agents, memory, security, LLM routing, workflows, tools, swarms, knowledge graphs, session replay, vault — is a plain function registered on an [iii-engine](https://iii.dev) bus. No frameworks, no vendor lock-in, no magic.
 
@@ -445,11 +445,11 @@ agentos/
 
 ## Testing
 
-2,419 tests across three languages:
+2,506 tests across three languages:
 
 ```bash
 npx vitest --run          # 1,439 TypeScript tests (48 files)
-cargo test --workspace    # 819 Rust tests (10 crates)
+cargo test --workspace    # 906 Rust tests (10 crates)
 python3 -m pytest         # 161 Python tests
 ```
 

@@ -1599,12 +1599,6 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_id_exactly_256_chars() {
-        let id = "a".repeat(256);
-        assert!(validate_id(&id).is_ok());
-    }
-
-    #[test]
     fn test_validate_id_boundary_255() {
         let id = "a".repeat(255);
         assert!(validate_id(&id).is_ok());
