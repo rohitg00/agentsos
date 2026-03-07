@@ -34,7 +34,6 @@ enum Screen {
     Templates,
     Usage,
     Settings,
-    Welcome,
     Wizard,
     WorkflowBuilder,
 }
@@ -46,7 +45,7 @@ impl Screen {
             Screen::Skills, Screen::Hands, Screen::Workflows, Screen::Sessions,
             Screen::Approvals, Screen::Logs, Screen::Memory, Screen::Audit,
             Screen::Security, Screen::Peers, Screen::Extensions, Screen::Triggers,
-            Screen::Templates, Screen::Usage, Screen::Settings, Screen::Welcome,
+            Screen::Templates, Screen::Usage, Screen::Settings,
             Screen::Wizard, Screen::WorkflowBuilder,
         ]
     }
@@ -72,7 +71,6 @@ impl Screen {
             Screen::Templates => "Templates",
             Screen::Usage => "Usage",
             Screen::Settings => "Settings",
-            Screen::Welcome => "Welcome",
             Screen::Wizard => "Wizard",
             Screen::WorkflowBuilder => "Wf Builder",
         }
@@ -99,7 +97,6 @@ impl Screen {
             Screen::Templates => "T",
             Screen::Usage => "u",
             Screen::Settings => "S",
-            Screen::Welcome => "w",
             Screen::Wizard => "W",
             Screen::WorkflowBuilder => "B",
         }
@@ -148,7 +145,7 @@ struct App {
 impl App {
     fn new() -> Self {
         Self {
-            screen: Screen::Welcome,
+            screen: Screen::Dashboard,
             selected: 0,
             status: "Connecting...".into(),
             healthy: false,
@@ -599,7 +596,7 @@ async fn main() -> Result<()> {
                 KeyCode::Char('e') => navigate_to(&mut app, Screen::Extensions),
                 KeyCode::Char('t') => navigate_to(&mut app, Screen::Triggers),
                 KeyCode::Char('u') => navigate_to(&mut app, Screen::Usage),
-                KeyCode::Char('w') => navigate_to(&mut app, Screen::Welcome),
+                KeyCode::Char('w') => navigate_to(&mut app, Screen::Dashboard),
                 KeyCode::Char('r') => app.refresh_screen().await,
                 KeyCode::Char('a') if app.screen == Screen::Approvals => {
                     app.approve_selected().await;
@@ -745,7 +742,6 @@ fn draw(f: &mut Frame, app: &App) {
         Screen::Templates => draw_templates(f, app, content_block, body_chunks[1]),
         Screen::Usage => draw_usage(f, app, content_block, body_chunks[1]),
         Screen::Settings => draw_settings(f, app, content_block, body_chunks[1]),
-        Screen::Welcome => draw_welcome(f, content_block, body_chunks[1]),
         Screen::Wizard => draw_wizard(f, app, body_chunks[1]),
         Screen::WorkflowBuilder => draw_workflow_builder(f, app, content_block, body_chunks[1]),
     }
@@ -768,6 +764,36 @@ fn draw(f: &mut Frame, app: &App) {
 }
 
 fn draw_dashboard(f: &mut Frame, app: &App, block: Block, area: Rect) {
+    if !app.healthy {
+        let logo = vec![
+            Line::from(""),
+            Line::from(Span::styled(r"     _                    _    ___  ____  ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(r"    / \   __ _  ___ _ __ | |_ / _ \/ ___| ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(r"   / _ \ / _` |/ _ \ '_ \| __| | | \___ \ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(r"  / ___ \ (_| |  __/ | | | |_| |_| |___) |", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(r" /_/   \_\__, |\___|_| |_|\__|\___/|____/ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled(r"         |___/                             ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(Span::styled("  Agent Operating System v0.1.0", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
+            Line::from(""),
+            Line::from(Span::styled("  Engine offline — waiting for connection...", Style::default().fg(Color::Yellow))),
+            Line::from(""),
+            Line::from(Span::styled("  Keybindings:", Style::default().add_modifier(Modifier::BOLD))),
+            Line::from(Span::styled("    1-0   Core screens (Dashboard, Agents, Chat...)", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    m     Memory          a  Audit", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    s     Security        p  Peers", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    e     Extensions      t  Triggers", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    u     Usage           T  Templates", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    S     Settings        W  Wizard", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    B     Wf Builder", Style::default().fg(Color::DarkGray))),
+            Line::from(""),
+            Line::from(Span::styled("    Tab / Shift-Tab to cycle screens", Style::default().fg(Color::DarkGray))),
+            Line::from(Span::styled("    r to refresh, q to quit", Style::default().fg(Color::DarkGray))),
+        ];
+        f.render_widget(Paragraph::new(logo).block(block), area);
+        return;
+    }
+
     let stats = &app.dashboard_stats;
     let agents = stats["agents"].as_u64().unwrap_or(0);
     let skills = stats["skills"].as_u64().unwrap_or(0);
@@ -799,7 +825,7 @@ fn draw_dashboard(f: &mut Frame, app: &App, block: Block, area: Rect) {
             Span::styled("  Status:     ", Style::default().add_modifier(Modifier::BOLD)),
             Span::styled(
                 stats["status"].as_str().unwrap_or("unknown"),
-                if app.healthy { Style::default().fg(Color::Green) } else { Style::default().fg(Color::Red) },
+                Style::default().fg(Color::Green),
             ),
         ]),
         Line::from(vec![
@@ -1342,33 +1368,6 @@ fn draw_settings(f: &mut Frame, app: &App, block: Block, area: Rect) {
     f.render_widget(table, area);
 }
 
-fn draw_welcome(f: &mut Frame, block: Block, area: Rect) {
-    let logo = vec![
-        Line::from(""),
-        Line::from(Span::styled(r"     _                    _    ___  ____  ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"    / \   __ _  ___ _ __ | |_ / _ \/ ___| ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"   / _ \ / _` |/ _ \ '_ \| __| | | \___ \ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"  / ___ \ (_| |  __/ | | | |_| |_| |___) |", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r" /_/   \_\__, |\___|_| |_|\__|\___/|____/ ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(Span::styled(r"         |___/                             ", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD))),
-        Line::from(""),
-        Line::from(Span::styled("  Agent Operating System v0.1.0", Style::default().fg(Color::White).add_modifier(Modifier::BOLD))),
-        Line::from(""),
-        Line::from("  Quickstart:"),
-        Line::from(Span::styled("    1-0   Core screens (Dashboard, Agents, Chat...)", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    m     Memory          a  Audit", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    s     Security        p  Peers", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    e     Extensions      t  Triggers", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    u     Usage           T  Templates", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    S     Settings        W  Wizard", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    B     Wf Builder      w  Welcome", Style::default().fg(Color::DarkGray))),
-        Line::from(""),
-        Line::from(Span::styled("    Tab / Shift-Tab to cycle all screens", Style::default().fg(Color::DarkGray))),
-        Line::from(Span::styled("    r to refresh, q to quit", Style::default().fg(Color::DarkGray))),
-    ];
-    f.render_widget(Paragraph::new(logo).block(block), area);
-}
-
 fn draw_wizard(f: &mut Frame, app: &App, area: Rect) {
     let step_labels = [
         "API Key", "Model Provider", "Workspace Name",
@@ -1516,7 +1515,7 @@ mod tests {
 
     #[test]
     fn test_screen_all_count() {
-        assert_eq!(Screen::all().len(), 22);
+        assert_eq!(Screen::all().len(), 21);
     }
 
     #[test]
@@ -1610,7 +1609,7 @@ mod tests {
     #[test]
     fn test_app_new_defaults() {
         let app = App::new();
-        assert_eq!(app.screen, Screen::Welcome);
+        assert_eq!(app.screen, Screen::Dashboard);
         assert_eq!(app.selected, 0);
         assert!(!app.healthy);
         assert!(app.agents.is_empty());
