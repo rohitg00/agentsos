@@ -563,6 +563,22 @@ async fn main() -> Result<()> {
                             app.wizard_values[app.wizard_step].pop();
                         }
                     }
+                    KeyCode::Char(c) if c.is_ascii_digit() || c == 'q' => {
+                        match c {
+                            'q' => app.running = false,
+                            '1' => navigate_to(&mut app, Screen::Dashboard),
+                            '2' => navigate_to(&mut app, Screen::Agents),
+                            '3' => navigate_to(&mut app, Screen::Chat),
+                            '4' => navigate_to(&mut app, Screen::Channels),
+                            '5' => navigate_to(&mut app, Screen::Skills),
+                            '6' => navigate_to(&mut app, Screen::Hands),
+                            '7' => navigate_to(&mut app, Screen::Workflows),
+                            '8' => navigate_to(&mut app, Screen::Sessions),
+                            '9' => navigate_to(&mut app, Screen::Approvals),
+                            '0' => navigate_to(&mut app, Screen::Logs),
+                            _ => {}
+                        }
+                    }
                     KeyCode::Char(c) => {
                         if app.wizard_step < app.wizard_values.len() {
                             app.wizard_values[app.wizard_step].push(c);
@@ -752,7 +768,7 @@ fn draw(f: &mut Frame, app: &App) {
         Screen::Approvals => " a:Approve  d:Deny  Up/Down:Select  r:Refresh  q:Quit ",
         Screen::Logs => " Up/Down:Scroll  r:Refresh  q:Quit ",
         Screen::WorkflowBuilder => " +:Add  -:Remove  x:Export  Up/Down:Select  q:Quit ",
-        Screen::Wizard => " Enter:Next  Tab:Forward  Shift-Tab:Back  Esc:Exit ",
+        Screen::Wizard => " Enter:Next  Tab:Fwd  Shift-Tab:Back  1-9:Nav  Esc:Dashboard  q:Quit ",
         _ => " q:Quit  Tab:Next  1-0:Screen  m/a/s/p/e/t/u:More  r:Refresh  Up/Down:Select ",
     };
     f.render_widget(
