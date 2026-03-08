@@ -36,7 +36,33 @@ Every capability — agents, memory, security, LLM routing, workflows, tools, sw
 └──────────────────────────────────────────────────────────────┘
 ```
 
+## Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/iii-hq/agentos/main/scripts/install.sh | sh
+```
+
+Installs both **iii-engine** (dependency) and **agentos** binary to `~/.local/bin`.
+
+Options:
+```bash
+AGENTOS_VERSION=v0.1.0 curl -fsSL ... | sh   # specific version
+BIN_DIR=/usr/local/bin curl -fsSL ... | sh    # custom install dir
+```
+
 ## Quickstart
+
+```bash
+# 1. Initialize and start
+agentos init --quick
+agentos config set-key anthropic $ANTHROPIC_API_KEY
+agentos start
+
+# 2. Chat with an agent
+agentos chat default
+```
+
+### Manual startup (development)
 
 ```bash
 # 1. Start the engine

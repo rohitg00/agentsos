@@ -5,8 +5,9 @@ import FadeIn from "./shared/FadeIn";
 import { stats } from "../data/stats";
 
 const TERMINAL_LINES = [
-  { text: "$ cargo install agentos", type: "command" },
-  { text: "  Installed agentos v0.1.0", type: "success" },
+  { text: "$ curl -fsSL .../install.sh | sh", type: "command" },
+  { text: "  > iii-engine already installed (v0.7.0)", type: "success" },
+  { text: "  > agentos v0.1.0 installed to ~/.local/bin", type: "success" },
   { text: "$ agentos start", type: "command" },
   { text: "  18 Rust crates + 39 TS workers started", type: "info" },
   { text: '$ agentos chat default "review PR #42"', type: "command" },
