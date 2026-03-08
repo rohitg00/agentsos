@@ -4,7 +4,10 @@ import FadeIn from "./shared/FadeIn";
 import SectionHeader from "./shared/SectionHeader";
 
 const steps = [
-  { cmd: "cargo install agentos", desc: "Install the AgentOS binary" },
+  {
+    cmd: "curl -fsSL https://raw.githubusercontent.com/iii-hq/agentos/main/scripts/install.sh | sh",
+    desc: "Install iii-engine + AgentOS binary",
+  },
   {
     cmd: "agentos init --quick",
     desc: "Scaffold a new agent project",
