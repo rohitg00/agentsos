@@ -4,11 +4,8 @@ import { join } from "node:path";
 import { requireAuth, sanitizeId } from "./shared/utils.js";
 import { SECURITY_HEADERS } from "./security-headers.js";
 import { safeInt } from "./shared/validate.js";
-import { createLogger } from "./shared/logger.js";
 import { safeCall } from "./shared/errors.js";
 import { shutdownManager } from "./shared/shutdown.js";
-
-const log = createLogger("api");
 
 function withSecHeaders(response: { status_code: number; body: any }): {
   status_code: number;

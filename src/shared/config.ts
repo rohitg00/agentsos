@@ -7,7 +7,7 @@ export const ENGINE_URL = process.env.III_ENGINE_URL || "ws://localhost:49134";
 export const WORKSPACE_ROOT = process.env.AGENTOS_WORKSPACE || process.cwd();
 
 export function initSDK(workerName: string) {
-  const sdk = init(ENGINE_URL, {
+  const sdk: any = init(ENGINE_URL, {
     workerName,
     otel: {
       enabled: true,
@@ -17,8 +17,8 @@ export function initSDK(workerName: string) {
       fetchInstrumentationEnabled: true,
     },
   });
-  if (typeof (sdk as any).shutdown === "function") {
-    shutdownManager.registerIIIShutdown((sdk as any).shutdown);
+  if (typeof sdk.shutdown === "function") {
+    shutdownManager.registerIIIShutdown(sdk.shutdown);
   }
   return sdk;
 }

@@ -10,6 +10,7 @@ registerFunction(
   },
   async () => {
     const agents: any[] = await trigger("state::list", { scope: "agents" }).catch(() => []);
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
     let cleaned = 0;
 
     for (const agent of agents) {
@@ -20,7 +21,6 @@ registerFunction(
         scope: `sessions:${agentId}`,
       }).catch(() => []);
 
-      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
       for (const session of sessions) {
         const lastActive = session.value?.lastActiveAt || session.value?.createdAt || 0;
         if (typeof lastActive === "number" && lastActive < cutoff) {
