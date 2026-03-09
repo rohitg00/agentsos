@@ -14,7 +14,11 @@ import "./code-agent.js";
 import "./context-manager.js";
 import "./context-monitor.js";
 import "./cost-tracker.js";
+import "./cron.js";
 import "./dashboard.js";
+import "./eval.js";
+import "./evolve.js";
+import "./feedback.js";
 import "./hand-runner.js";
 import "./hooks.js";
 import "./knowledge-graph.js";
@@ -41,6 +45,5 @@ import "./tools.js";
 import "./tools-extended.js";
 import "./vault.js";
 import "./workflow.js";
-import "./cron.js";
 
 console.log("AgentOS ready");

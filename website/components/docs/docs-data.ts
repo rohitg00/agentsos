@@ -196,7 +196,7 @@ The pipeline overhead for this chain is just 18% vs direct function calls.`,
   {
     slug: "architecture",
     title: "Architecture",
-    desc: "10 Rust crates, 39 TypeScript workers, and how they connect",
+    desc: "10 Rust crates, 43 TypeScript workers, and how they connect",
     category: "Core Concepts",
     content: `# Architecture
 
@@ -217,13 +217,14 @@ AgentOS is a multi-language system with a Rust core, TypeScript application laye
 | \`agents-core\` | Shared types and utilities |
 | \`agents-desktop\` | Tauri 2.0 native app |
 
-## TypeScript Workers (39)
+## TypeScript Workers (43)
 
 The application logic runs as iii-engine workers:
 
 - **Agent workers** (30): Pre-built agent templates for code review, research, ops, etc.
 - **Tool workers** (6): Browser, filesystem, shell, HTTP, MCP, A2A
-- **System workers** (3): Orchestrator, session manager, cost tracker
+- **Evolution workers** (3): evolve, eval, feedback (self-evolving function loop)
+- **System workers** (4): Orchestrator, session manager, cost tracker, cron
 
 ## Python Worker (1)
 
@@ -692,6 +693,124 @@ const swarm = await trigger("swarm::create", {
 \`\`\``,
   },
   {
+    slug: "dynamic-evolution",
+    title: "Dynamic Evolution",
+    desc: "Agents write, register, eval, and improve functions at runtime",
+    category: "Core Concepts",
+    content: `# Dynamic Function Evolution
+
+AgentOS agents can write new functions at runtime, register them on the iii bus, score them against eval suites, and automatically improve or kill them based on performance. This closes the loop from static orchestration to self-evolving systems.
+
+## Evolve: Runtime Code Generation
+
+\`\`\`typescript
+const fn = await trigger("evolve::generate", {
+  goal: "Double a number",
+  name: "doubler",
+  agentId: "agent-1",
+});
+// => { functionId: "evolved::doubler_v1", status: "draft", code: "async (input) => ..." }
+
+await trigger("evolve::register", { functionId: "evolved::doubler_v1" });
+// Security scan + sandbox validation + live registration on iii bus
+\`\`\`
+
+### Security Sandbox
+
+Evolved functions run in a \`node:vm\` sandbox with hardened constructor chain:
+- **No access to**: fetch, fs, process, require, setTimeout, eval, Function constructor
+- **Sandboxed trigger()**: only \`evolved::\`, \`tool::\`, \`llm::\` prefixes allowed
+- **10s execution timeout** per invocation
+- **100KB output truncation**
+- Pre-registration: \`skill::pipeline\` static security scan
+
+### Lifecycle
+
+\`\`\`
+draft → staging → production → deprecated → killed
+\`\`\`
+
+Each version gets a unique ID (\`evolved::{name}_v{n}\`). Old versions are never overwritten.
+
+## Eval: Production Scoring
+
+\`\`\`typescript
+await trigger("eval::run", {
+  functionId: "evolved::doubler_v1",
+  input: { value: 5 },
+  expected: { doubled: 10 },
+  scorer: "exact_match",
+});
+\`\`\`
+
+### Scorer Types
+- **exact_match** — JSON deep equality (0 or 1)
+- **llm_judge** — LLM rates output 0.0-1.0
+- **semantic_similarity** — Jaccard word-set similarity
+- **custom** — use any evolved/eval/tool function as scorer
+
+### Score Formula
+\`\`\`
+overall = correctness × 0.50
+        + safety × 0.25
+        + latency_score × 0.15
+        + cost_score × 0.10
+\`\`\`
+
+### Inline Auto-Scoring
+
+Every evolved function call is automatically scored (configurable per-function):
+- \`auto\` (default) — score every invocation
+- \`sampled\` — score 10% of invocations
+- \`manual\` — only via \`eval::run\`
+- \`off\` — no scoring
+
+## Feedback Loop
+
+\`\`\`typescript
+await trigger("feedback::review", { functionId: "evolved::doubler_v1" });
+// Analyzes last 5 eval results → KEEP / IMPROVE / KILL
+\`\`\`
+
+### Decision Algorithm
+- **KILL**: ≥3 failures (correctness < 0.5) in last 5 results
+- **IMPROVE**: average overall score < 0.5
+- **KEEP**: otherwise
+
+### Recursive Improvement
+
+When a function needs improvement, the feedback loop:
+1. Generates a new version with eval feedback in the LLM prompt
+2. Runs the eval suite against the new version
+3. If still below threshold, recurses (up to 3 times)
+4. Each iteration produces a separate versioned function
+
+### Auto-Review
+
+A cron job runs \`feedback::auto_review\` every 6 hours, reviewing all staging and production functions.
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | \`/api/evolve/generate\` | LLM writes function from goal |
+| POST | \`/api/evolve/register\` | Security scan + register |
+| POST | \`/api/evolve/unregister\` | Kill a function |
+| GET | \`/api/evolve\` | List evolved functions |
+| GET | \`/api/evolve/:functionId\` | Get function details |
+| POST | \`/api/eval/run\` | Run single eval |
+| POST | \`/api/eval/suite\` | Run eval suite |
+| GET | \`/api/eval/history/:functionId\` | Eval history |
+| POST | \`/api/eval/compare\` | Compare two versions |
+| POST | \`/api/eval/suites\` | Create eval suite |
+| POST | \`/api/feedback/review\` | Trigger review |
+| POST | \`/api/feedback/improve\` | Trigger improvement |
+| POST | \`/api/feedback/promote\` | Promote function |
+| POST | \`/api/feedback/demote\` | Demote/kill function |
+| GET | \`/api/feedback/leaderboard\` | Leaderboard |
+| POST | \`/api/feedback/policy\` | Get/set thresholds |`,
+  },
+  {
     slug: "workflows",
     title: "Workflows",
     desc: "Multi-agent pipelines with retry, branching, and approval gates",
@@ -911,6 +1030,37 @@ GET    /api/channels            # List channels
 POST   /api/channels            # Add channel
 DELETE /api/channels/:id        # Remove channel
 POST   /api/channels/:id/test   # Test channel
+\`\`\`
+
+## Evolve
+
+\`\`\`
+POST   /api/evolve/generate     # LLM generates function from goal
+POST   /api/evolve/register     # Security scan + register on bus
+POST   /api/evolve/unregister   # Kill a function
+GET    /api/evolve              # List evolved functions
+GET    /api/evolve/:functionId  # Get function details
+\`\`\`
+
+## Eval
+
+\`\`\`
+POST   /api/eval/run            # Run single eval
+POST   /api/eval/suite          # Run eval suite
+GET    /api/eval/history/:id    # Eval history for function
+POST   /api/eval/compare        # Compare two versions
+POST   /api/eval/suites         # Create eval suite
+\`\`\`
+
+## Feedback
+
+\`\`\`
+POST   /api/feedback/review     # Review function performance
+POST   /api/feedback/improve    # Trigger improvement cycle
+POST   /api/feedback/promote    # Promote function status
+POST   /api/feedback/demote     # Demote or kill function
+GET    /api/feedback/leaderboard # Ranked function scores
+POST   /api/feedback/policy     # Get/set threshold policy
 \`\`\`
 
 ## Health
