@@ -7,6 +7,7 @@ type CleanupCallback = () => void | Promise<void>;
 class ShutdownManager {
   private inFlight = new Map<string, number>();
   private cleanupCallbacks: CleanupCallback[] = [];
+  private iiiShutdowns: (() => Promise<void>)[] = [];
   private shuttingDown = false;
   private initialized = false;
 
@@ -23,6 +24,10 @@ class ShutdownManager {
 
   onShutdown(callback: CleanupCallback): void {
     this.cleanupCallbacks.push(callback);
+  }
+
+  registerIIIShutdown(shutdownFn: () => Promise<void>): void {
+    this.iiiShutdowns.push(shutdownFn);
   }
 
   isShuttingDown(): boolean {
@@ -69,6 +74,14 @@ class ShutdownManager {
           await cb();
         } catch (e) {
           logError(e, { operation: "shutdown_cleanup" });
+        }
+      }
+
+      for (const shutdown of this.iiiShutdowns) {
+        try {
+          await shutdown();
+        } catch (e) {
+          logError(e, { operation: "iii_shutdown" });
         }
       }
 

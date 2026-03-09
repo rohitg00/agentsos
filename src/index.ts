@@ -1,4 +1,4 @@
-console.log("AgentOS booting: 38 workers");
+console.log("AgentOS booting (iii-sdk v0.8.0, OTel enabled)");
 
 import "./agent-core.js";
 import "./api.js";
@@ -38,5 +38,6 @@ import "./tools.js";
 import "./tools-extended.js";
 import "./vault.js";
 import "./workflow.js";
+import "./cron.js";
 
 console.log("AgentOS ready");
