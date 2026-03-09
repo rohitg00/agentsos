@@ -347,6 +347,20 @@ describe("feedback::demote", () => {
     );
     expect(result.newStatus).toBe("killed");
   });
+
+  it("returns no-op for already killed function", async () => {
+    seedKv("evolved_functions", "evolved::already_dead_v1", {
+      functionId: "evolved::already_dead_v1",
+      status: "killed",
+    });
+
+    const result = await call(
+      "feedback::demote",
+      authReq({ functionId: "evolved::already_dead_v1" }),
+    );
+    expect(result.demoted).toBe(false);
+    expect(result.reason).toContain("Already killed");
+  });
 });
 
 describe("feedback::leaderboard", () => {
@@ -376,6 +390,20 @@ describe("feedback::leaderboard", () => {
     expect(result[0].rank).toBe(1);
     expect(result[0].functionId).toBe("evolved::top_v1");
     expect(result[1].rank).toBe(2);
+  });
+
+  it("clamps negative limit to 0", async () => {
+    seedKv("evolved_functions", "evolved::clamp_v1", {
+      functionId: "evolved::clamp_v1",
+      status: "production",
+      evalScores: { overall: 0.9 },
+    });
+
+    const result = await call(
+      "feedback::leaderboard",
+      authReq({ limit: -5 }),
+    );
+    expect(result).toHaveLength(0);
   });
 
   it("excludes killed functions", async () => {
@@ -414,6 +442,33 @@ describe("feedback::policy", () => {
     expect(result.minScoreToKeep).toBe(0.7);
     expect(result.maxFailuresToKill).toBe(5);
     expect(result.minEvalsToPromote).toBe(5);
+  });
+
+  it("rejects negative integer fields", async () => {
+    await expect(
+      call("feedback::policy", authReq({ maxFailuresToKill: -1 })),
+    ).rejects.toThrow("non-negative integer");
+  });
+
+  it("rejects non-integer count fields", async () => {
+    await expect(
+      call("feedback::policy", authReq({ minEvalsToPromote: 3.5 })),
+    ).rejects.toThrow("non-negative integer");
+  });
+
+  it("rejects minScoreToKeep out of range", async () => {
+    await expect(
+      call("feedback::policy", authReq({ minScoreToKeep: 1.5 })),
+    ).rejects.toThrow("between 0 and 1");
+  });
+
+  it("ignores NaN and Infinity values", async () => {
+    const result = await call(
+      "feedback::policy",
+      authReq({ minScoreToKeep: 0.6, maxFailuresToKill: NaN }),
+    );
+    expect(result.minScoreToKeep).toBe(0.6);
+    expect(result.maxFailuresToKill).toBe(3);
   });
 });
 

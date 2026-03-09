@@ -717,12 +717,16 @@ await trigger("evolve::register", { functionId: "evolved::doubler_v1" });
 
 ### Security Sandbox
 
-Evolved functions run in a \`node:vm\` sandbox with hardened constructor chain:
+Evolved functions run in an **in-process \`node:vm\` sandbox** (not OS-level or WASM isolation) with a hardened constructor chain:
 - **No access to**: fetch, fs, process, require, setTimeout, eval, Function constructor
+- **Hardened constructor chain**: \`Function.prototype.constructor\` getter throws to prevent sandbox escape
 - **Sandboxed trigger()**: only \`evolved::\`, \`tool::\`, \`llm::\` prefixes allowed
 - **10s execution timeout** per invocation
 - **100KB output truncation**
-- Pre-registration: \`skill::pipeline\` static security scan
+
+Registration is **dual-gated**:
+1. \`skill::pipeline\` runs static scanning and dynamic sandbox testing (requires \`approved = true\`, \`scan.safe\`, and \`sandbox.passed\`)
+2. \`evolve::register\` then runs a second \`executeInSandbox()\` validation with a test input before live registration on the iii bus
 
 ### Lifecycle
 
@@ -1047,7 +1051,7 @@ GET    /api/evolve/:functionId  # Get function details
 \`\`\`
 POST   /api/eval/run            # Run single eval
 POST   /api/eval/suite          # Run eval suite
-GET    /api/eval/history/:id    # Eval history for function
+GET    /api/eval/history/:functionId  # Eval history for function
 POST   /api/eval/compare        # Compare two versions
 POST   /api/eval/suites         # Create eval suite
 \`\`\`

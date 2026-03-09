@@ -163,7 +163,10 @@ async function checkSafety(output: unknown): Promise<number> {
     null,
     { operation: "safety_scan" },
   );
-  if (result === null) return 1.0;
+  if (result === null) {
+    log.warn("Safety scanner unavailable, failing closed");
+    return 0;
+  }
   return result?.safe === false ? 0 : 1.0;
 }
 

@@ -260,14 +260,15 @@ registerFunction(
       return { improved: false, reason: "Generation failed", depth };
     }
 
-    await trigger("evolve::register", {
-      headers: { authorization: "Bearer internal" },
-      body: { functionId: newFn.functionId },
-      functionId: newFn.functionId,
-    });
-
+    const policy = await getPolicy();
     let newScore = 0;
     if (suiteId) {
+      await trigger("evolve::register", {
+        headers: { authorization: "Bearer internal" },
+        body: { functionId: newFn.functionId },
+        functionId: newFn.functionId,
+      });
+
       const suiteResult: any = await safeCall(
         () =>
           trigger("eval::suite", {
@@ -279,25 +280,30 @@ registerFunction(
         { operation: "improve_eval" },
       );
       newScore = suiteResult?.aggregate?.correctness ?? 0;
-    }
 
-    const policy = await getPolicy();
-    if (suiteId && newScore < policy.minScoreToKeep && depth + 1 < MAX_IMPROVE_DEPTH) {
-      log.info("Recursing improvement", {
-        functionId: newFn.functionId,
-        depth: depth + 1,
-        score: newScore,
-      });
-      return trigger("feedback::improve", {
-        headers: { authorization: "Bearer internal" },
-        body: {
+      if (newScore < policy.minScoreToKeep && depth + 1 < MAX_IMPROVE_DEPTH) {
+        log.info("Recursing improvement", {
+          functionId: newFn.functionId,
+          depth: depth + 1,
+          score: newScore,
+        });
+        return trigger("feedback::improve", {
+          headers: { authorization: "Bearer internal" },
+          body: {
+            functionId: newFn.functionId,
+            depth: depth + 1,
+            suiteId,
+          },
           functionId: newFn.functionId,
           depth: depth + 1,
           suiteId,
-        },
+        });
+      }
+    } else {
+      await trigger("evolve::register", {
+        headers: { authorization: "Bearer internal" },
+        body: { functionId: newFn.functionId },
         functionId: newFn.functionId,
-        depth: depth + 1,
-        suiteId,
       });
     }
 
@@ -425,6 +431,8 @@ registerFunction(
 
     if (kill) {
       fn.status = "killed";
+    } else if (fn.status === "killed") {
+      return { demoted: false, functionId, reason: "Already killed" };
     } else if (fn.status === "production") {
       fn.status = "staging";
     } else if (fn.status === "staging") {
@@ -474,7 +482,8 @@ registerFunction(
         (b.evalScores?.overall || 0) - (a.evalScores?.overall || 0),
     );
 
-    const limit = Math.min(Number(rawLimit) || 50, 100);
+    const parsed = Number(rawLimit);
+    const limit = Math.max(0, Math.min(Number.isFinite(parsed) ? parsed : 50, 100));
     return functions.slice(0, limit).map((f: any, i: number) => ({
       rank: i + 1,
       functionId: f.functionId,
@@ -512,8 +521,29 @@ registerFunction(
     const current = await getPolicy();
     const updated: FeedbackPolicy = { ...current };
     for (const k of policyKeys) {
-      if (typeof body[k] === "number") {
-        (updated as any)[k] = body[k];
+      if (typeof body[k] === "number" && Number.isFinite(body[k])) {
+        const v = body[k];
+        if (k === "maxFailuresToKill" || k === "minEvalsToPromote") {
+          if (!Number.isInteger(v) || v < 0) {
+            throw Object.assign(
+              new Error(`${k} must be a non-negative integer`),
+              { statusCode: 400 },
+            );
+          }
+        }
+        if (k === "minScoreToKeep" && (v < 0 || v > 1)) {
+          throw Object.assign(
+            new Error("minScoreToKeep must be between 0 and 1"),
+            { statusCode: 400 },
+          );
+        }
+        if (k === "autoReviewIntervalMs" && v < 0) {
+          throw Object.assign(
+            new Error("autoReviewIntervalMs must be non-negative"),
+            { statusCode: 400 },
+          );
+        }
+        (updated as any)[k] = v;
       }
     }
     await trigger("state::set", {
@@ -533,6 +563,31 @@ registerFunction(
     metadata: { category: "feedback", cron: true },
   },
   async () => {
+    const policy = await getPolicy();
+
+    const lastRun: any = await safeCall(
+      () =>
+        trigger("state::get", {
+          scope: "feedback_policy",
+          key: "auto_review_last_run",
+        }),
+      null,
+      { operation: "get_last_run" },
+    );
+    if (lastRun && Date.now() - lastRun < policy.autoReviewIntervalMs) {
+      log.info("Auto-review skipped: within interval", {
+        lastRun,
+        intervalMs: policy.autoReviewIntervalMs,
+      });
+      return { reviewed: 0, skipped: true, results: [] };
+    }
+
+    await trigger("state::set", {
+      scope: "feedback_policy",
+      key: "auto_review_last_run",
+      value: Date.now(),
+    });
+
     const all: any[] = await safeCall(
       () => trigger("state::list", { scope: "evolved_functions" }),
       [],
