@@ -11,14 +11,13 @@ import { promisify } from "util";
 import { assertNoSsrf } from "./shared/utils.js";
 import { safeCall } from "./shared/errors.js";
 import { createLogger } from "./shared/logger.js";
-import { createRecordMetric } from "./shared/metrics.js";
+import { recordMetric } from "./shared/metrics.js";
 
 const log = createLogger("tools");
 const execFileAsync = promisify(execFile);
 
 const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("tools");
 
-const recordMetric = createRecordMetric(triggerVoid);
 
 async function withToolMetrics<T>(
   toolId: string,

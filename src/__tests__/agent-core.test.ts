@@ -61,7 +61,6 @@ const mockTrigger = vi.fn(async (fnId: string, data?: any): Promise<any> => {
   if (fnId === "agent::delete") return { deleted: true };
   if (fnId === "publish") return null;
   if (fnId === "hook::fire") return null;
-  if (fnId === "telemetry::record") return { ok: true };
   return null;
 });
 const mockTriggerVoid = vi.fn();
@@ -85,6 +84,18 @@ vi.mock("iii-sdk", () => ({
     triggerVoid: mockTriggerVoid,
     listFunctions: mockListFunctions,
   }),
+  getContext: vi.fn(() => ({ logger: null })),
+}));
+
+const noopInstrument = { add: vi.fn(), record: vi.fn() };
+vi.mock("@opentelemetry/api", () => ({
+  metrics: {
+    getMeter: vi.fn(() => ({
+      createCounter: vi.fn(() => noopInstrument),
+      createHistogram: vi.fn(() => noopInstrument),
+      createUpDownCounter: vi.fn(() => noopInstrument),
+    })),
+  },
 }));
 
 vi.mock("../shared/errors.js", () => ({
@@ -183,7 +194,6 @@ beforeEach(() => {
       if (fnId === "context::compress") return { ok: true };
       if (fnId === "replay::record") return { ok: true };
       if (fnId === "agent::code_detect") return { hasCode: false, blocks: [] };
-      if (fnId === "telemetry::record") return { ok: true };
       if (fnId === "agent::list_tools")
         return [
           { function_id: "tool::web_search" },

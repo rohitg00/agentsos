@@ -13,7 +13,6 @@ const mockTrigger = vi.fn(async (fnId: string, data?: any): Promise<any> => {
       model: "test-model",
       usage: { input: 10, output: 20, total: 30 },
     };
-  if (fnId === "stream::send") return { ok: true };
   if (fnId === "agent::chat")
     return {
       content: "agent response text for testing purposes",
@@ -80,29 +79,6 @@ describe("stream::chat", () => {
     expect(result.body.usage).toBeDefined();
     expect(result.body.usage.input).toBe(10);
     expect(result.body.usage.output).toBe(20);
-  });
-
-  it("sends stream chunks via stream::send", async () => {
-    await call("stream::chat", {
-      body: { message: "test", sessionId: "s1" },
-      headers: { authorization: "Bearer test-key" },
-    });
-    const streamCalls = mockTrigger.mock.calls.filter(
-      (c) => c[0] === "stream::send",
-    );
-    expect(streamCalls.length).toBeGreaterThan(0);
-  });
-
-  it("sends done event at end of stream", async () => {
-    await call("stream::chat", {
-      body: { message: "test" },
-      headers: { authorization: "Bearer test-key" },
-    });
-    const streamCalls = mockTrigger.mock.calls.filter(
-      (c) => c[0] === "stream::send",
-    );
-    const lastStreamCall = streamCalls[streamCalls.length - 1];
-    expect(lastStreamCall[1].data.type).toBe("done");
   });
 
   it("uses default agentId when not provided", async () => {

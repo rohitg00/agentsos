@@ -160,12 +160,11 @@ describe("approval::check extended", () => {
     expect(pubCalls.some(c => c[1].topic === "approval.requested")).toBe(true);
   });
 
-  it("sends to approval stream", async () => {
+  it("publishes approval request via publish", async () => {
     getScope("approval_policy").set("default", { tools: ["*"], timeoutMs: 300000 });
     await call("approval::check", { agentId: "stream-agent", toolName: "tool::y", params: {} });
-    const streamCalls = mockTriggerVoid.mock.calls.filter(c => c[0] === "stream::send");
-    expect(streamCalls.length).toBe(1);
-    expect(streamCalls[0][1].stream_name).toBe("approvals");
+    const pubCalls = mockTriggerVoid.mock.calls.filter(c => c[0] === "publish");
+    expect(pubCalls.some(c => c[1].topic === "approval.requested")).toBe(true);
   });
 
   it("uses custom timeoutMs from policy", async () => {

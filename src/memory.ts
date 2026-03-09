@@ -2,13 +2,11 @@ import { initSDK } from "./shared/config.js";
 import { createHash } from "crypto";
 import { safeCall } from "./shared/errors.js";
 import { createLogger } from "./shared/logger.js";
-import { createRecordMetric } from "./shared/metrics.js";
+import { recordMetric } from "./shared/metrics.js";
 
 const log = createLogger("memory");
 
 const { registerFunction, trigger, triggerVoid } = initSDK("memory");
-
-const recordMetric = createRecordMetric(triggerVoid);
 
 interface MemoryEntry {
   id: string;
