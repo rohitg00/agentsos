@@ -1,5 +1,4 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { requireAuth, sanitizeId } from "./shared/utils.js";
@@ -8,7 +7,6 @@ import { safeInt } from "./shared/validate.js";
 import { createLogger } from "./shared/logger.js";
 import { safeCall } from "./shared/errors.js";
 import { shutdownManager } from "./shared/shutdown.js";
-import { createRecordMetric } from "./shared/metrics.js";
 
 const log = createLogger("api");
 
@@ -22,50 +20,7 @@ function withSecHeaders(response: { status_code: number; body: any }): {
   return { ...response, headers: { ...SECURITY_HEADERS } };
 }
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "api" },
-);
-
-const recordMetric = createRecordMetric(triggerVoid);
-
-function instrumentedHandler(
-  functionId: string,
-  method: string,
-  apiPath: string,
-  handler: (req: any) => Promise<any>,
-): (req: any) => Promise<any> {
-  return async (req: any) => {
-    const start = Date.now();
-    try {
-      const result = await handler(req);
-      const status = String(result?.status_code || 200);
-      recordMetric(
-        "api_request_duration_ms",
-        Date.now() - start,
-        { path: apiPath, method, status },
-        "histogram",
-      );
-      return result;
-    } catch (err: any) {
-      recordMetric(
-        "api_request_duration_ms",
-        Date.now() - start,
-        { path: apiPath, method, status: "500" },
-        "histogram",
-      );
-      recordMetric("function_error_total", 1, {
-        functionId,
-        errorType: err?.code || err?.name || "unknown",
-      });
-      log.error("API request failed", {
-        functionId,
-        duration: Date.now() - start,
-      });
-      throw err;
-    }
-  };
-}
+const { registerFunction, registerTrigger, trigger } = initSDK("api");
 
 const PKG_VERSION = (() => {
   try {
@@ -117,49 +72,98 @@ registerFunction(
     id: "api::chat_completions",
     description: "OpenAI-compatible chat completions",
     metadata: { category: "api" },
-  },
-  instrumentedHandler(
-    "api::chat_completions",
-    "POST",
-    "v1/chat/completions",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "message");
-      if (rateErr) return rateErr;
-
-      const { model, messages } = req.body || req;
-      const lastMessage = messages?.[messages.length - 1]?.content || "";
-
-      const response: any = await trigger("agent::chat", {
-        agentId: "default",
-        message: lastMessage,
-        sessionId: `api:${Date.now()}`,
-      });
-
-      return withSecHeaders({
-        status_code: 200,
-        body: {
-          id: `chatcmpl-${crypto.randomUUID().slice(0, 8)}`,
-          object: "chat.completion",
-          created: Math.floor(Date.now() / 1000),
-          model: response.model || model || "claude-sonnet-4-6",
-          choices: [
-            {
-              index: 0,
-              message: { role: "assistant", content: response.content },
-              finish_reason: "stop",
-            },
+    request_format: [
+      { name: "model", type: "string", required: true, description: "Model identifier" },
+      {
+        name: "messages",
+        type: "array",
+        required: true,
+        description: "Array of chat messages",
+        items: {
+          name: "message",
+          type: "object",
+          body: [
+            { name: "role", type: "string", required: true },
+            { name: "content", type: "string", required: true },
           ],
-          usage: {
-            prompt_tokens: response.usage?.input || 0,
-            completion_tokens: response.usage?.output || 0,
-            total_tokens: response.usage?.total || 0,
-          },
         },
-      });
-    },
-  ),
+      },
+    ],
+    response_format: [
+      { name: "id", type: "string", description: "Completion ID" },
+      { name: "object", type: "string", description: "Object type" },
+      { name: "created", type: "number", description: "Unix timestamp" },
+      { name: "model", type: "string", description: "Model used" },
+      {
+        name: "choices",
+        type: "array",
+        description: "Completion choices",
+        items: {
+          name: "choice",
+          type: "object",
+          body: [
+            { name: "index", type: "number" },
+            {
+              name: "message",
+              type: "object",
+              body: [
+                { name: "role", type: "string" },
+                { name: "content", type: "string" },
+              ],
+            },
+            { name: "finish_reason", type: "string" },
+          ],
+        },
+      },
+      {
+        name: "usage",
+        type: "object",
+        description: "Token usage",
+        body: [
+          { name: "prompt_tokens", type: "number" },
+          { name: "completion_tokens", type: "number" },
+          { name: "total_tokens", type: "number" },
+        ],
+      },
+    ],
+  },
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "message");
+    if (rateErr) return rateErr;
+
+    const { model, messages } = req.body || req;
+    const lastMessage = messages?.[messages.length - 1]?.content || "";
+
+    const response: any = await trigger("agent::chat", {
+      agentId: "default",
+      message: lastMessage,
+      sessionId: `api:${Date.now()}`,
+    });
+
+    return withSecHeaders({
+      status_code: 200,
+      body: {
+        id: `chatcmpl-${crypto.randomUUID().slice(0, 8)}`,
+        object: "chat.completion",
+        created: Math.floor(Date.now() / 1000),
+        model: response.model || model || "claude-sonnet-4-6",
+        choices: [
+          {
+            index: 0,
+            message: { role: "assistant", content: response.content },
+            finish_reason: "stop",
+          },
+        ],
+        usage: {
+          prompt_tokens: response.usage?.input || 0,
+          completion_tokens: response.usage?.output || 0,
+          total_tokens: response.usage?.total || 0,
+        },
+      },
+    });
+  },
 );
 
 registerFunction(
@@ -167,29 +171,42 @@ registerFunction(
     id: "api::agent_message",
     description: "Send message to a specific agent",
     metadata: { category: "api" },
+    request_format: [
+      { name: "message", type: "string", required: true, description: "Message to send" },
+      { name: "sessionId", type: "string", required: false, description: "Optional session ID" },
+    ],
+    response_format: [
+      { name: "content", type: "string", description: "Agent response content" },
+      { name: "model", type: "string", description: "Model used" },
+      {
+        name: "usage",
+        type: "object",
+        description: "Token usage",
+        body: [
+          { name: "input", type: "number" },
+          { name: "output", type: "number" },
+          { name: "total", type: "number" },
+        ],
+      },
+    ],
   },
-  instrumentedHandler(
-    "api::agent_message",
-    "POST",
-    "api/agents/:id/message",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "message");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "message");
+    if (rateErr) return rateErr;
 
-      const agentId = sanitizeId(req.path_params?.id);
-      const { message, sessionId } = req.body || req;
+    const agentId = sanitizeId(req.path_params?.id);
+    const { message, sessionId } = req.body || req;
 
-      const response = await trigger("agent::chat", {
-        agentId,
-        message,
-        sessionId,
-      });
+    const response = await trigger("agent::chat", {
+      agentId,
+      message,
+      sessionId,
+    });
 
-      return withSecHeaders({ status_code: 200, body: response });
-    },
-  ),
+    return withSecHeaders({ status_code: 200, body: response });
+  },
 );
 
 registerFunction(
@@ -198,20 +215,15 @@ registerFunction(
     description: "List all agents",
     metadata: { category: "api" },
   },
-  instrumentedHandler(
-    "api::list_agents",
-    "GET",
-    "api/agents",
-    async (req: any) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "read");
-      if (rateErr) return rateErr;
+  async (req: any) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "read");
+    if (rateErr) return rateErr;
 
-      const agents = await trigger("agent::list", {});
-      return withSecHeaders({ status_code: 200, body: agents });
-    },
-  ),
+    const agents = await trigger("agent::list", {});
+    return withSecHeaders({ status_code: 200, body: agents });
+  },
 );
 
 registerFunction(
@@ -219,21 +231,26 @@ registerFunction(
     id: "api::create_agent",
     description: "Create a new agent",
     metadata: { category: "api" },
+    request_format: [
+      { name: "name", type: "string", required: true, description: "Agent name" },
+      { name: "systemPrompt", type: "string", required: true, description: "System prompt for the agent" },
+      { name: "model", type: "string", required: true, description: "LLM model identifier" },
+    ],
+    response_format: [
+      { name: "id", type: "string", description: "Created agent ID" },
+      { name: "name", type: "string", description: "Agent name" },
+      { name: "createdAt", type: "number", description: "Creation timestamp" },
+    ],
   },
-  instrumentedHandler(
-    "api::create_agent",
-    "POST",
-    "api/agents",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "write");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "write");
+    if (rateErr) return rateErr;
 
-      const result = await trigger("agent::create", req.body || req);
-      return withSecHeaders({ status_code: 201, body: result });
-    },
-  ),
+    const result = await trigger("agent::create", req.body || req);
+    return withSecHeaders({ status_code: 201, body: result });
+  },
 );
 
 registerFunction(
@@ -242,28 +259,23 @@ registerFunction(
     description: "Get agent by ID",
     metadata: { category: "api" },
   },
-  instrumentedHandler(
-    "api::get_agent",
-    "GET",
-    "api/agents/:id",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "read");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "read");
+    if (rateErr) return rateErr;
 
-      const agent = await trigger("state::get", {
-        scope: "agents",
-        key: sanitizeId(req.path_params?.id),
+    const agent = await trigger("state::get", {
+      scope: "agents",
+      key: sanitizeId(req.path_params?.id),
+    });
+    if (!agent)
+      return withSecHeaders({
+        status_code: 404,
+        body: { error: "Agent not found" },
       });
-      if (!agent)
-        return withSecHeaders({
-          status_code: 404,
-          body: { error: "Agent not found" },
-        });
-      return withSecHeaders({ status_code: 200, body: agent });
-    },
-  ),
+    return withSecHeaders({ status_code: 200, body: agent });
+  },
 );
 
 registerFunction(
@@ -272,22 +284,17 @@ registerFunction(
     description: "Delete an agent",
     metadata: { category: "api" },
   },
-  instrumentedHandler(
-    "api::delete_agent",
-    "DELETE",
-    "api/agents/:id",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "write");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "write");
+    if (rateErr) return rateErr;
 
-      await trigger("agent::delete", {
-        agentId: sanitizeId(req.path_params?.id),
-      });
-      return withSecHeaders({ status_code: 204, body: null });
-    },
-  ),
+    await trigger("agent::delete", {
+      agentId: sanitizeId(req.path_params?.id),
+    });
+    return withSecHeaders({ status_code: 204, body: null });
+  },
 );
 
 registerFunction(
@@ -296,22 +303,17 @@ registerFunction(
     description: "List sessions for an agent",
     metadata: { category: "api" },
   },
-  instrumentedHandler(
-    "api::agent_sessions",
-    "GET",
-    "api/agents/:id/sessions",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "read");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "read");
+    if (rateErr) return rateErr;
 
-      const sessions = await trigger("state::list", {
-        scope: `sessions:${sanitizeId(req.path_params?.id)}`,
-      });
-      return withSecHeaders({ status_code: 200, body: sessions });
-    },
-  ),
+    const sessions = await trigger("state::list", {
+      scope: `sessions:${sanitizeId(req.path_params?.id)}`,
+    });
+    return withSecHeaders({ status_code: 200, body: sessions });
+  },
 );
 
 registerFunction(
@@ -319,8 +321,14 @@ registerFunction(
     id: "api::health",
     description: "Health check endpoint",
     metadata: { category: "api" },
+    response_format: [
+      { name: "status", type: "string", description: "Health status" },
+      { name: "version", type: "string", description: "Application version" },
+      { name: "workers", type: "number", description: "Active worker count" },
+      { name: "uptime", type: "number", description: "Process uptime in seconds" },
+    ],
   },
-  instrumentedHandler("api::health", "GET", "api/health", async (req: any) => {
+  async (req: any) => {
     if (shutdownManager.isShuttingDown()) {
       return withSecHeaders({
         status_code: 503,
@@ -351,7 +359,7 @@ registerFunction(
         uptime: process.uptime(),
       },
     });
-  }),
+  },
 );
 
 registerFunction(
@@ -360,7 +368,7 @@ registerFunction(
     description: "Get cost breakdown",
     metadata: { category: "api" },
   },
-  instrumentedHandler("api::costs", "GET", "api/costs", async (req: any) => {
+  async (req: any) => {
     const authErr = authGuard(req);
     if (authErr) return authErr;
     const rateErr = await rateGuard(req, "read");
@@ -376,7 +384,7 @@ registerFunction(
       status_code: 200,
       body: costs || { totalCost: 0 },
     });
-  }),
+  },
 );
 
 registerFunction(
@@ -385,27 +393,22 @@ registerFunction(
     description: "Query agent memory",
     metadata: { category: "api" },
   },
-  instrumentedHandler(
-    "api::memory_query",
-    "POST",
-    "api/agents/:id/memory",
-    async (req) => {
-      const authErr = authGuard(req);
-      if (authErr) return authErr;
-      const rateErr = await rateGuard(req, "read");
-      if (rateErr) return rateErr;
+  async (req) => {
+    const authErr = authGuard(req);
+    if (authErr) return authErr;
+    const rateErr = await rateGuard(req, "read");
+    if (rateErr) return rateErr;
 
-      const agentId = sanitizeId(req.path_params?.id);
-      const { query, limit: rawLimit } = req.query_params || req.body || {};
-      const limit = safeInt(rawLimit, 1, 200, 10);
-      const results = await trigger("memory::recall", {
-        agentId,
-        query,
-        limit,
-      });
-      return withSecHeaders({ status_code: 200, body: results });
-    },
-  ),
+    const agentId = sanitizeId(req.path_params?.id);
+    const { query, limit: rawLimit } = req.query_params || req.body || {};
+    const limit = safeInt(rawLimit, 1, 200, 10);
+    const results = await trigger("memory::recall", {
+      agentId,
+      query,
+      limit,
+    });
+    return withSecHeaders({ status_code: 200, body: results });
+  },
 );
 
 registerTrigger({

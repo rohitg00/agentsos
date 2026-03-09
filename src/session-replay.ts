@@ -1,10 +1,6 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 
-const { registerFunction, registerTrigger, trigger } = init(
-  ENGINE_URL,
-  { workerName: "session-replay" },
-);
+const { registerFunction, registerTrigger, trigger } = initSDK("session-replay");
 
 type ReplayAction = "llm_call" | "tool_call" | "tool_result" | "memory_op";
 
@@ -32,7 +28,7 @@ registerFunction(
   {
     id: "replay::record",
     description: "Record an action in the session replay log",
-    metadata: { category: "replay" },
+    metadata: { category: "session-replay" },
   },
   async (input: RecordInput) => {
     const { sessionId, agentId, action, data, durationMs, iteration } = input;
@@ -74,7 +70,7 @@ registerFunction(
   {
     id: "replay::get",
     description: "Get full session replay",
-    metadata: { category: "replay" },
+    metadata: { category: "session-replay" },
   },
   async ({ sessionId }: { sessionId: string }) => {
     if (!sessionId) return { error: "sessionId required" };
@@ -97,7 +93,7 @@ registerFunction(
   {
     id: "replay::search",
     description: "Search replay sessions by criteria",
-    metadata: { category: "replay" },
+    metadata: { category: "session-replay" },
   },
   async ({
     agentId,
@@ -161,7 +157,7 @@ registerFunction(
   {
     id: "replay::summary",
     description: "Get session replay summary with stats",
-    metadata: { category: "replay" },
+    metadata: { category: "session-replay" },
   },
   async ({ sessionId }: { sessionId: string }) => {
     if (!sessionId) return { error: "sessionId required" };

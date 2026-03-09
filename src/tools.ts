@@ -1,6 +1,5 @@
-import { init } from "iii-sdk";
 import {
-  ENGINE_URL,
+  initSDK,
   WORKSPACE_ROOT,
   assertPathContained,
 } from "./shared/config.js";
@@ -17,10 +16,7 @@ import { createRecordMetric } from "./shared/metrics.js";
 const log = createLogger("tools");
 const execFileAsync = promisify(execFile);
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "tools" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("tools");
 
 const recordMetric = createRecordMetric(triggerVoid);
 
@@ -64,7 +60,7 @@ registerFunction(
   {
     id: "tool::file_read",
     description: "Read file contents with path containment",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ path, maxBytes }: { path: string; maxBytes?: number }) => {
     return withToolMetrics("tool::file_read", async () => {
@@ -82,7 +78,7 @@ registerFunction(
   {
     id: "tool::file_write",
     description: "Write file with path containment",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ path, content }: { path: string; content: string }) => {
     return withToolMetrics("tool::file_write", async () => {
@@ -99,7 +95,7 @@ registerFunction(
   {
     id: "tool::file_list",
     description: "List directory contents",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ path, recursive }: { path: string; recursive?: boolean }) => {
     const resolved = resolve(WORKSPACE_ROOT, path || ".");
@@ -130,7 +126,7 @@ registerFunction(
   {
     id: "tool::apply_patch",
     description: "Apply a unified diff patch",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ path, patch }: { path: string; patch: string }) => {
     const resolved = resolve(WORKSPACE_ROOT, path);
@@ -212,7 +208,7 @@ registerFunction(
   {
     id: "tool::shell_exec",
     description: "Execute command with sandbox (no shell interpretation)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     argv,
@@ -296,7 +292,7 @@ registerFunction(
   {
     id: "tool::web_fetch",
     description: "SSRF-protected HTTP fetch with HTML-to-text",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ url, maxSize }: { url: string; maxSize?: number }) => {
     await assertNoSsrf(url);
@@ -337,7 +333,7 @@ registerFunction(
   {
     id: "tool::web_search",
     description: "Multi-provider web search",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     query,
@@ -425,7 +421,7 @@ registerFunction(
   {
     id: "tool::agent_spawn",
     description: "Spawn a sub-agent with depth limit and resource quota",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     template,
@@ -512,7 +508,7 @@ registerFunction(
   {
     id: "tool::agent_send",
     description: "Send message to another agent with spam prevention",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     agentId,
