@@ -1,22 +1,42 @@
 import { initSDK } from "./shared/config.js";
+import { metrics } from "@opentelemetry/api";
 
 const { registerFunction, registerTrigger } = initSDK("telemetry");
 
-registerFunction(
-  {
-    id: "telemetry::record",
-    description: "Record a metric event (delegates to OTel)",
-    metadata: { category: "telemetry" },
-  },
-  async (input: {
-    name: string;
-    value: number;
-    labels?: Record<string, string>;
-    type?: "counter" | "histogram" | "gauge";
-  }) => {
-    return { recorded: true, name: input.name, note: "Metrics collected via OTel" };
-  },
-);
+const meter = metrics.getMeter("agentos");
+
+let lastCpuUsage = process.cpuUsage();
+let lastCpuTime = Date.now();
+
+function collectWorkerMetrics() {
+  const mem = process.memoryUsage();
+  const currentCpu = process.cpuUsage(lastCpuUsage);
+  const elapsed = (Date.now() - lastCpuTime) * 1000;
+  const cpuPercent = elapsed > 0 ? ((currentCpu.user + currentCpu.system) / elapsed) * 100 : 0;
+  lastCpuUsage = process.cpuUsage();
+  lastCpuTime = Date.now();
+
+  return {
+    cpuPercent: Math.round(cpuPercent * 10) / 10,
+    memoryRss: mem.rss,
+    memoryHeapUsed: mem.heapUsed,
+    memoryHeapTotal: mem.heapTotal,
+    uptimeSeconds: process.uptime(),
+  };
+}
+
+meter.createObservableGauge("agentos.cpu.percent", {
+  description: "CPU usage percentage",
+}).addCallback((obs) => {
+  const m = collectWorkerMetrics();
+  obs.observe(m.cpuPercent);
+});
+
+meter.createObservableGauge("agentos.memory.rss", {
+  description: "Resident set size in bytes",
+}).addCallback((obs) => {
+  obs.observe(process.memoryUsage.rss());
+});
 
 registerFunction(
   {
@@ -25,12 +45,10 @@ registerFunction(
     metadata: { category: "telemetry" },
   },
   async () => {
+    const snapshot = collectWorkerMetrics();
     return {
-      counters: {},
-      histograms: {},
-      gauges: {},
+      ...snapshot,
       collectedAt: new Date().toISOString(),
-      note: "Metrics available via OTel exporter endpoint",
     };
   },
 );
@@ -42,9 +60,16 @@ registerFunction(
     metadata: { category: "telemetry" },
   },
   async () => {
+    const snapshot = collectWorkerMetrics();
+    const lines = [
+      `CPU Usage: ${snapshot.cpuPercent}%`,
+      `Memory RSS: ${(snapshot.memoryRss / 1024 / 1024).toFixed(1)} MB`,
+      `Heap Used: ${(snapshot.memoryHeapUsed / 1024 / 1024).toFixed(1)} MB`,
+      `Uptime: ${snapshot.uptimeSeconds.toFixed(0)} s`,
+    ];
     return {
-      text: "Metrics are now collected via OpenTelemetry.\nUse your OTel-compatible dashboard (Grafana, Jaeger, etc.) to view metrics.",
-      data: { note: "OTel auto-collects worker CPU, memory, event loop lag, and uptime" },
+      text: lines.join("\n"),
+      data: snapshot,
     };
   },
 );

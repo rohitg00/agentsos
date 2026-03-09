@@ -81,12 +81,6 @@ registerFunction(
       data: { requestId, agentId, toolName },
     });
 
-    triggerVoid("stream::send", {
-      stream_name: "approvals",
-      group_id: "pending",
-      data: request,
-    });
-
     return { required: true, approved: false, status: "pending", requestId };
   },
 );

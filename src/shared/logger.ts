@@ -1,44 +1,25 @@
 import { getContext } from "iii-sdk";
 
-interface LogContext {
-  [key: string]: unknown;
-}
+type LogFn = (message: string, context?: Record<string, unknown>) => void;
 
-interface Logger {
-  info(message: string, context?: LogContext): void;
-  warn(message: string, context?: LogContext): void;
-  error(message: string, context?: LogContext): void;
-  debug(message: string, context?: LogContext): void;
-}
-
-export function createLogger(module: string): Logger {
-  function trySDKLogger() {
-    try {
-      return getContext().logger;
-    } catch {
-      return null;
-    }
-  }
-
-  function emit(level: string, message: string, context?: LogContext): void {
-    const sdkLogger = trySDKLogger();
+export function createLogger(module: string): Record<"info" | "warn" | "error" | "debug", LogFn> {
+  function emit(level: string, message: string, context?: Record<string, unknown>): void {
     const data = context ? { module, ...context } : { module };
 
-    if (sdkLogger) {
-      switch (level) {
-        case "error": sdkLogger.error(message, data); break;
-        case "warn": sdkLogger.warn(message, data); break;
-        case "debug": sdkLogger.debug(message, data); break;
-        default: sdkLogger.info(message, data); break;
+    try {
+      const logger = getContext().logger;
+      if (logger) {
+        (logger as any)[level]?.(message, data) ?? logger.info(message, data);
+        return;
       }
+    } catch {}
+
+    const entry = { timestamp: new Date().toISOString(), level, module, message, ...context };
+    const line = JSON.stringify(entry);
+    if (level === "error") {
+      process.stderr.write(line + "\n");
     } else {
-      const entry = { timestamp: new Date().toISOString(), level, module, message, ...context };
-      const line = JSON.stringify(entry);
-      if (level === "error") {
-        process.stderr.write(line + "\n");
-      } else {
-        process.stdout.write(line + "\n");
-      }
+      process.stdout.write(line + "\n");
     }
   }
 

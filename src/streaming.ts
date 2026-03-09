@@ -36,31 +36,6 @@ registerFunction(
       messages: [...memories, { role: "user", content: message }],
     });
 
-    const chunks = chunkMarkdownAware(response.content || "", 50, 200);
-
-    for (const chunk of chunks) {
-      await trigger("stream::send", {
-        stream_name: "chat",
-        group_id: sessionId || `default:${agentId || "default"}`,
-        data: {
-          type: "delta",
-          delta: chunk,
-          model: response.model,
-        },
-      }).catch(() => {});
-    }
-
-    await trigger("stream::send", {
-      stream_name: "chat",
-      group_id: sessionId || `default:${agentId || "default"}`,
-      data: {
-        type: "done",
-        content: response.content,
-        usage: response.usage,
-        model: response.model,
-      },
-    }).catch(() => {});
-
     return {
       status_code: 200,
       body: {

@@ -185,12 +185,6 @@ registerFunction(
       data: { approvalId, agentId: safeAgentId, toolId, tier },
     });
 
-    triggerVoid("stream::send", {
-      stream_name: "approvals",
-      group_id: "pending",
-      data: { approvalId, agentId: safeAgentId, toolId, tier },
-    });
-
     if (tier === "async") {
       return { approved: false, tier, status: "pending", approvalId };
     }

@@ -10,7 +10,7 @@ import { filterToolsByProfile } from "./tool-profiles.js";
 import { safeCall } from "./shared/errors.js";
 import { shutdownManager } from "./shared/shutdown.js";
 import { createLogger } from "./shared/logger.js";
-import { createRecordMetric } from "./shared/metrics.js";
+import { recordMetric } from "./shared/metrics.js";
 
 const log = createLogger("agent-core");
 
@@ -31,8 +31,6 @@ const CONTEXT_HEALTH_THRESHOLD = 60;
 function earlyResponse(content: string): ChatResponse {
   return { content, model: undefined, usage: undefined, iterations: 0 };
 }
-
-const recordMetric = createRecordMetric(triggerVoid);
 
 type TriggerFn = typeof trigger;
 type TriggerVoidFn = typeof triggerVoid;
