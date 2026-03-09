@@ -1,10 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { createHash } from "crypto";
 
-const { registerFunction, trigger, triggerVoid } = init(ENGINE_URL, {
-  workerName: "loop-guard",
-});
+const { registerFunction, trigger, triggerVoid } = initSDK("loop-guard");
 
 interface CallRecord {
   hash: string;

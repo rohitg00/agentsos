@@ -1,6 +1,5 @@
 import { timingSafeEqual } from "crypto";
-import { init } from "iii-sdk";
-import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
+import { initSDK, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
 function safeCompare(a: string, b: string): boolean {
@@ -11,10 +10,7 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-messenger" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-messenger");
 const getSecret = createSecretGetter(trigger);
 
 const API_URL = "https://graph.facebook.com/v18.0/me/messages";

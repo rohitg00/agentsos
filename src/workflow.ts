@@ -1,12 +1,8 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth } from "./shared/utils.js";
 import { safePagination } from "./shared/validate.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "workflow" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("workflow");
 
 type StepMode = "sequential" | "fanout" | "collect" | "conditional" | "loop";
 type ErrorMode = "fail" | "skip" | "retry";

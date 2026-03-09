@@ -1,12 +1,8 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { PRICING } from "./shared/pricing.js";
 import type { CostRecord, CostSummary, BudgetStatus } from "./types.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "cost-tracker" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("cost-tracker");
 
 registerFunction(
   {

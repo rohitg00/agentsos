@@ -1,8 +1,22 @@
 import { realpathSync } from "node:fs";
 import { isAbsolute, relative, resolve } from "node:path";
+import { init } from "iii-sdk";
 
 export const ENGINE_URL = process.env.III_ENGINE_URL || "ws://localhost:49134";
 export const WORKSPACE_ROOT = process.env.AGENTOS_WORKSPACE || process.cwd();
+
+export function initSDK(workerName: string) {
+  return init(ENGINE_URL, {
+    workerName,
+    otel: {
+      enabled: true,
+      serviceName: "agentos",
+      serviceVersion: "0.0.1",
+      metricsEnabled: true,
+      fetchInstrumentationEnabled: true,
+    },
+  });
+}
 
 export function assertPathContained(resolved: string) {
   let real: string;

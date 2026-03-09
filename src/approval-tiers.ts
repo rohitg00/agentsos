@@ -1,11 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth, sanitizeId } from "./shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "approval-tiers" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("approval-tiers");
 
 type ApprovalTier = "auto" | "async" | "sync";
 

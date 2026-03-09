@@ -1,9 +1,6 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 
-const { registerFunction, registerTrigger } = init(ENGINE_URL, {
-  workerName: "security-headers",
-});
+const { registerFunction, registerTrigger } = initSDK("security-headers");
 
 export const SECURITY_HEADERS: Record<string, string> = {
   "Content-Security-Policy":

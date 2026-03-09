@@ -1,11 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
+import { initSDK, createSecretGetter } from "../shared/config.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-line" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-line");
 const getSecret = createSecretGetter(trigger);
 const API_URL = "https://api.line.me/v2/bot/message";
 

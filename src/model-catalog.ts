@@ -1,9 +1,6 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 
-const { registerFunction, registerTrigger } = init(ENGINE_URL, {
-  workerName: "model-catalog",
-});
+const { registerFunction, registerTrigger } = initSDK("model-catalog");
 
 type Tier = "frontier" | "smart" | "balanced" | "fast" | "local";
 

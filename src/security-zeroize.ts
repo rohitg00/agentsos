@@ -1,11 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { randomFillSync } from "crypto";
 
-const { registerFunction, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "security-zeroize" },
-);
+const { registerFunction, trigger, triggerVoid } = initSDK("security-zeroize");
 
 const AUTO_DISPOSE_MS = 30_000;
 

@@ -1,10 +1,6 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 
-const { registerFunction, registerTrigger, trigger } = init(
-  ENGINE_URL,
-  { workerName: "knowledge-graph" },
-);
+const { registerFunction, registerTrigger, trigger } = initSDK("knowledge-graph");
 
 interface TemporalKGEntity {
   entity: string;

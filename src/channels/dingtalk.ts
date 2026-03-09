@@ -1,12 +1,8 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
+import { initSDK, createSecretGetter } from "../shared/config.js";
 import { createHmac } from "crypto";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-dingtalk" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-dingtalk");
 const getSecret = createSecretGetter(trigger);
 
 const API_URL = "https://oapi.dingtalk.com/robot/send";
