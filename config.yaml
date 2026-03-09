@@ -54,7 +54,7 @@ modules:
   - class: modules::observability::OtelModule
     config:
       enabled: true
-      exporter: memory
+      exporter: stdout
       metrics_enabled: true
       logs_enabled: true
       alerts:

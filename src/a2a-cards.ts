@@ -1,10 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth } from "./shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger } = init(ENGINE_URL, {
-  workerName: "a2a-cards",
-});
+const { registerFunction, registerTrigger, trigger } = initSDK("a2a-cards");
 
 interface A2aAgentCard {
   name: string;

@@ -1,13 +1,9 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { createVerify } from "crypto";
 import { writeFileSync, unlinkSync, rmdirSync, mkdtempSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "skill-security" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("skill-security");
 
 interface ScanFinding {
   severity: "critical" | "high" | "medium" | "low";

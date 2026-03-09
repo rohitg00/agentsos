@@ -1,15 +1,11 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
+import { initSDK, createSecretGetter } from "../shared/config.js";
 import {
   splitMessage,
   resolveAgent,
   verifyTelegramUpdate,
 } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-telegram" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-telegram");
 const getSecret = createSecretGetter(trigger);
 
 registerFunction(

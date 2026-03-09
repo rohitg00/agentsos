@@ -1,11 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "../shared/config.js";
+import { initSDK } from "../shared/config.js";
 import { splitMessage, resolveAgent, assertNoSsrf } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-webhook" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-webhook");
 
 registerFunction(
   {

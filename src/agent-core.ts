@@ -1,5 +1,4 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import type {
   AgentConfig,
   ChatRequest,
@@ -21,7 +20,7 @@ const {
   trigger,
   triggerVoid,
   listFunctions,
-} = init(ENGINE_URL, { workerName: "agent-core" });
+} = initSDK("agent-core");
 
 const MAX_ITERATIONS = 50;
 const TOOL_TIMEOUT_MS = 120_000;
@@ -32,8 +31,6 @@ const CONTEXT_HEALTH_THRESHOLD = 60;
 function earlyResponse(content: string): ChatResponse {
   return { content, model: undefined, usage: undefined, iterations: 0 };
 }
-
-shutdownManager.initShutdown();
 
 const recordMetric = createRecordMetric(triggerVoid);
 

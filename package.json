@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
-    "iii-sdk": "^0.4.1",
+    "iii-sdk": "^0.8.0",
     "nodemailer": "^8.0.1"
   },
   "devDependencies": {

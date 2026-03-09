@@ -1,12 +1,8 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "../shared/config.js";
+import { initSDK } from "../shared/config.js";
 import { createTransport } from "nodemailer";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-email" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-email");
 
 const transporter = createTransport({
   host: process.env.SMTP_HOST || "localhost",

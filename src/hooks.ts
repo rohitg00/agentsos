@@ -1,10 +1,6 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "hooks" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("hooks");
 
 type HookType =
   | "BeforeToolCall"

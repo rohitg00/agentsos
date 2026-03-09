@@ -1,16 +1,8 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth } from "./shared/utils.js";
 import { SECURITY_HEADERS } from "./security-headers.js";
 import { safeCall } from "./shared/errors.js";
-import { shutdownManager } from "./shared/shutdown.js";
-
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "dashboard" },
-);
-
-shutdownManager.initShutdown();
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("dashboard");
 
 registerFunction(
   {

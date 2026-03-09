@@ -1,11 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth } from "./shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger } = init(
-  ENGINE_URL,
-  { workerName: "skills" },
-);
+const { registerFunction, registerTrigger, trigger } = initSDK("skills");
 
 interface Skill {
   id: string;
@@ -416,7 +412,7 @@ registerFunction(
   {
     id: "skill::list",
     description: "List all available skills",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async (req: any) => {
     if (req.headers) requireAuth(req);
@@ -444,7 +440,7 @@ registerFunction(
   {
     id: "skill::install",
     description: "Install a skill from content or marketplace",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async (req: any) => {
     requireAuth(req);
@@ -503,7 +499,7 @@ registerFunction(
   {
     id: "skill::uninstall",
     description: "Remove an installed skill",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async (req: any) => {
     requireAuth(req);
@@ -520,7 +516,7 @@ registerFunction(
   {
     id: "skill::get",
     description: "Get skill content for injection into agent context",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async ({ id }: { id: string }) => {
     const bundled = BUNDLED_SKILLS.find((s) => s.id === id);
@@ -534,7 +530,7 @@ registerFunction(
   {
     id: "skill::search",
     description: "Search skills by query",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async (req: any) => {
     if (req.headers) requireAuth(req);
@@ -562,7 +558,7 @@ registerFunction(
   {
     id: "skill::parse",
     description: "Parse a SKILL.md file",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async ({ content }: { content: string }) => {
     const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
@@ -599,7 +595,7 @@ registerFunction(
   {
     id: "skill::marketplace_search",
     description: "Search the SkillKit marketplace for external skills",
-    metadata: { category: "skill" },
+    metadata: { category: "skills" },
   },
   async (req: any) => {
     if (req.headers) requireAuth(req);

@@ -1,5 +1,4 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL, WORKSPACE_ROOT } from "./shared/config.js";
+import { initSDK, WORKSPACE_ROOT } from "./shared/config.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { readFile, readdir } from "fs/promises";
@@ -7,9 +6,7 @@ import { resolve, join } from "path";
 
 const execFileAsync = promisify(execFile);
 
-const { registerFunction, registerTrigger } = init(ENGINE_URL, {
-  workerName: "skillkit-bridge",
-});
+const { registerFunction, registerTrigger } = initSDK("skillkit-bridge");
 
 const SAFE_ENV: Record<string, string> = {};
 for (const key of [

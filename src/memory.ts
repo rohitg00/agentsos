@@ -1,5 +1,4 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { createHash } from "crypto";
 import { safeCall } from "./shared/errors.js";
 import { createLogger } from "./shared/logger.js";
@@ -7,9 +6,7 @@ import { createRecordMetric } from "./shared/metrics.js";
 
 const log = createLogger("memory");
 
-const { registerFunction, trigger, triggerVoid } = init(ENGINE_URL, {
-  workerName: "memory",
-});
+const { registerFunction, trigger, triggerVoid } = initSDK("memory");
 
 const recordMetric = createRecordMetric(triggerVoid);
 

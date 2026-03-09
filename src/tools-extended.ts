@@ -1,6 +1,5 @@
-import { init } from "iii-sdk";
 import {
-  ENGINE_URL,
+  initSDK,
   WORKSPACE_ROOT,
   assertPathContained,
 } from "./shared/config.js";
@@ -16,10 +15,7 @@ import { safeCall } from "./shared/errors.js";
 
 const execFileAsync = promisify(execFile);
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "tools-extended" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("tools-extended");
 
 const TAINT_ENV_ALLOWLIST = new Set([
   "PATH",
@@ -44,7 +40,7 @@ registerFunction(
   {
     id: "tool::schedule_reminder",
     description: "Store a reminder with a target time",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     label,
@@ -78,7 +74,7 @@ registerFunction(
   {
     id: "tool::cron_create",
     description: "Register a cron trigger for periodic execution",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     name,
@@ -117,7 +113,7 @@ registerFunction(
   {
     id: "tool::cron_list",
     description: "List all registered cron jobs",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async () => {
     const jobs: any = await safeCall(
@@ -133,7 +129,7 @@ registerFunction(
   {
     id: "tool::cron_delete",
     description: "Remove a cron job",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ name }: { name: string }) => {
     await trigger("state::delete", { scope: "cron_jobs", key: name });
@@ -145,7 +141,7 @@ registerFunction(
   {
     id: "tool::todo_create",
     description: "Create a todo item",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     title,
@@ -178,7 +174,7 @@ registerFunction(
   {
     id: "tool::todo_list",
     description: "List todo items",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ status, assignee }: { status?: string; assignee?: string }) => {
     const items: any = await safeCall(
@@ -199,7 +195,7 @@ registerFunction(
   {
     id: "tool::todo_update",
     description: "Update a todo item status or fields",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     id,
@@ -240,7 +236,7 @@ registerFunction(
   {
     id: "tool::todo_delete",
     description: "Delete a todo item",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ id }: { id: string }) => {
     await trigger("state::delete", { scope: "todos", key: id });
@@ -252,7 +248,7 @@ registerFunction(
   {
     id: "tool::image_analyze",
     description: "Describe an image using LLM vision",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ url, prompt }: { url: string; prompt?: string }) => {
     await assertNoSsrf(url);
@@ -276,7 +272,7 @@ registerFunction(
   {
     id: "tool::image_generate_prompt",
     description: "Generate an image generation prompt from a description",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ description, style }: { description: string; style?: string }) => {
     const styleHint = style ? ` in ${style} style` : "";
@@ -301,7 +297,7 @@ registerFunction(
   {
     id: "tool::audio_transcribe",
     description: "Transcribe audio (stub - requires external API)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ url }: { url: string }) => {
     await assertNoSsrf(url);
@@ -318,7 +314,7 @@ registerFunction(
   {
     id: "tool::tts_speak",
     description: "Text-to-speech (stub - requires external API)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ text, voice }: { text: string; voice?: string }) => {
     return {
@@ -334,7 +330,7 @@ registerFunction(
   {
     id: "tool::media_download",
     description: "SSRF-protected media file download",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     url,
@@ -396,7 +392,7 @@ registerFunction(
   {
     id: "tool::kg_add",
     description: "Add an entity or relation to the knowledge graph",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     entity,
@@ -460,7 +456,7 @@ registerFunction(
   {
     id: "tool::kg_query",
     description: "Traverse the knowledge graph from an entity",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     entity,
@@ -507,7 +503,7 @@ registerFunction(
   {
     id: "tool::kg_visualize",
     description: "Generate a Mermaid diagram from the knowledge graph",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ entity, depth }: { entity: string; depth?: number }) => {
     const maxDepth = Math.min(depth || 2, 4);
@@ -547,7 +543,7 @@ registerFunction(
   {
     id: "tool::memory_store",
     description: "Store a memory entry with metadata",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     key,
@@ -580,7 +576,7 @@ registerFunction(
   {
     id: "tool::memory_recall",
     description: "Recall a memory by key",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ key }: { key: string }) => {
     const memory: any = await safeCall(
@@ -603,7 +599,7 @@ registerFunction(
   {
     id: "tool::memory_search",
     description: "Search memories by query across content and tags",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ query, limit }: { query: string; limit?: number }) => {
     const all: any = await safeCall(
@@ -631,7 +627,7 @@ registerFunction(
   {
     id: "tool::agent_list",
     description: "List running agents",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async () => {
     const agents: any = await safeCall(
@@ -654,7 +650,7 @@ registerFunction(
   {
     id: "tool::agent_delegate",
     description: "Delegate a task to another agent",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     agentId,
@@ -675,7 +671,7 @@ registerFunction(
   {
     id: "tool::channel_send",
     description: "Send a message to a channel",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     channel,
@@ -698,7 +694,7 @@ registerFunction(
   {
     id: "tool::env_get",
     description: "Get a filtered environment variable (safe list only)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ name }: { name: string }) => {
     if (!TAINT_ENV_ALLOWLIST.has(name)) {
@@ -714,7 +710,7 @@ registerFunction(
   {
     id: "tool::system_info",
     description: "Get system information (OS, CPU, memory)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async () => {
     return {
@@ -734,7 +730,7 @@ registerFunction(
   {
     id: "tool::process_list",
     description: "List running processes",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async () => {
     const cmd = os.platform() === "win32" ? "tasklist" : "ps";
@@ -761,7 +757,7 @@ registerFunction(
   {
     id: "tool::disk_usage",
     description: "Get disk usage statistics",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ path: diskPath }: { path?: string }) => {
     const target = diskPath || WORKSPACE_ROOT;
@@ -788,7 +784,7 @@ registerFunction(
   {
     id: "tool::network_check",
     description: "Check network connectivity",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ host, timeout }: { host?: string; timeout?: number }) => {
     const target = host || "8.8.8.8";
@@ -830,7 +826,7 @@ registerFunction(
   {
     id: "tool::code_analyze",
     description: "Analyze code complexity (line counts, function counts)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ filePath }: { filePath: string }) => {
     const resolved = resolve(WORKSPACE_ROOT, filePath);
@@ -884,7 +880,7 @@ registerFunction(
   {
     id: "tool::code_format",
     description: "Format code using prettier or language-specific formatter",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ filePath, formatter }: { filePath: string; formatter?: string }) => {
     const resolved = resolve(WORKSPACE_ROOT, filePath);
@@ -927,7 +923,7 @@ registerFunction(
   {
     id: "tool::code_lint",
     description: "Lint code using eslint or language-specific linter",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ filePath, linter }: { filePath: string; linter?: string }) => {
     const resolved = resolve(WORKSPACE_ROOT, filePath);
@@ -977,7 +973,7 @@ registerFunction(
   {
     id: "tool::code_test",
     description: "Run tests using a specified command",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     command,
@@ -1044,7 +1040,7 @@ registerFunction(
   {
     id: "tool::code_explain",
     description: "Explain code using LLM",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ filePath, question }: { filePath: string; question?: string }) => {
     const resolved = resolve(WORKSPACE_ROOT, filePath);
@@ -1071,7 +1067,7 @@ registerFunction(
   {
     id: "tool::json_transform",
     description: "Transform JSON data using jq-like expressions",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ data, expression }: { data: string; expression: string }) => {
     const parsed = JSON.parse(data);
@@ -1104,7 +1100,7 @@ registerFunction(
   {
     id: "tool::csv_parse",
     description: "Parse CSV text to JSON",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     content,
@@ -1145,7 +1141,7 @@ registerFunction(
   {
     id: "tool::yaml_parse",
     description: "Parse YAML text to JSON (simple subset)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ content }: { content: string }) => {
     const result: Record<string, any> = {};
@@ -1208,7 +1204,7 @@ registerFunction(
   {
     id: "tool::regex_test",
     description: "Test a regex pattern against text",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     pattern,
@@ -1244,7 +1240,7 @@ registerFunction(
   {
     id: "tool::uuid_generate",
     description: "Generate a UUID v4",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ count }: { count?: number }) => {
     const n = Math.min(count || 1, 100);
@@ -1257,7 +1253,7 @@ registerFunction(
   {
     id: "tool::hash_compute",
     description: "Compute a hash (sha256, md5, sha1)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     input,
@@ -1285,7 +1281,7 @@ registerFunction(
   {
     id: "tool::vector_store",
     description: "Store text with vector embedding for similarity search",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     id,
@@ -1328,7 +1324,7 @@ registerFunction(
   {
     id: "tool::vector_search",
     description: "Search stored documents by similarity using BM25 scoring",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     query,
@@ -1380,7 +1376,7 @@ registerFunction(
   {
     id: "tool::vector_delete",
     description: "Delete a document from vector store",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ id, namespace }: { id: string; namespace?: string }) => {
     if (!id) throw new Error("id is required");
@@ -1394,7 +1390,7 @@ registerFunction(
   {
     id: "tool::git_status",
     description: "Get git repository status, branch, and recent log",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ cwd }: { cwd?: string }) => {
     const dir = cwd ? resolve(WORKSPACE_ROOT, cwd) : WORKSPACE_ROOT;
@@ -1432,7 +1428,7 @@ registerFunction(
   {
     id: "tool::git_diff",
     description: "Show git diff for staged or unstaged changes",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     staged,
@@ -1471,7 +1467,7 @@ registerFunction(
   {
     id: "tool::git_commit",
     description: "Stage files and create a git commit",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     message,
@@ -1511,7 +1507,7 @@ registerFunction(
   {
     id: "tool::git_log",
     description: "Get git log with optional filters",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     count,
@@ -1560,7 +1556,7 @@ registerFunction(
   {
     id: "tool::sql_build",
     description: "Build parameterized SQL queries safely (no execution)",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     operation,
@@ -1676,7 +1672,7 @@ registerFunction(
   {
     id: "tool::snapshot_create",
     description: "Create a snapshot of agent state for backup/restore",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     agentId,
@@ -1730,7 +1726,7 @@ registerFunction(
   {
     id: "tool::snapshot_restore",
     description: "Restore agent state from a snapshot",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ snapshotId, dryRun }: { snapshotId: string; dryRun?: boolean }) => {
     if (!snapshotId) throw new Error("snapshotId is required");
@@ -1770,7 +1766,7 @@ registerFunction(
   {
     id: "tool::snapshot_list",
     description: "List available snapshots",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({ agentId }: { agentId?: string }) => {
     const all = (await trigger("state::list", { scope: "snapshots" }).catch(
@@ -1803,7 +1799,7 @@ registerFunction(
   {
     id: "tool::api_call",
     description: "Make HTTP API calls with retry and structured response",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     url,
@@ -1889,7 +1885,7 @@ registerFunction(
     id: "tool::compose",
     description:
       "Chain multiple tool calls in sequence, piping outputs to inputs",
-    metadata: { category: "tool" },
+    metadata: { category: "tools" },
   },
   async ({
     steps,

@@ -1,15 +1,11 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL, createSecretGetter } from "../shared/config.js";
+import { initSDK, createSecretGetter } from "../shared/config.js";
 import {
   splitMessage,
   resolveAgent,
   verifySlackSignature,
 } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "channel-slack" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-slack");
 const getSecret = createSecretGetter(trigger);
 
 registerFunction(

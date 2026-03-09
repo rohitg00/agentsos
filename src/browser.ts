@@ -1,5 +1,4 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { writeFile, unlink } from "fs/promises";
@@ -9,10 +8,7 @@ import { assertNoSsrf, requireAuth } from "./shared/utils.js";
 
 const execFileAsync = promisify(execFile);
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "browser" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("browser");
 
 interface BrowserSession {
   id: string;

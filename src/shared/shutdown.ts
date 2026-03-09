@@ -25,6 +25,10 @@ class ShutdownManager {
     this.cleanupCallbacks.push(callback);
   }
 
+  registerIIIShutdown(shutdownFn: () => Promise<void>): void {
+    this.cleanupCallbacks.push(shutdownFn);
+  }
+
   isShuttingDown(): boolean {
     return this.shuttingDown;
   }

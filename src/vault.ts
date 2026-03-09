@@ -1,13 +1,9 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import { requireAuth } from "./shared/utils.js";
 import { wrapZeroized, autoDispose } from "./security-zeroize.js";
 import { safeCall } from "./shared/errors.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = init(
-  ENGINE_URL,
-  { workerName: "vault" },
-);
+const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("vault");
 
 interface VaultEntry {
   key: string;

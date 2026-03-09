@@ -1,10 +1,7 @@
-import { init } from "iii-sdk";
-import { ENGINE_URL } from "./shared/config.js";
+import { initSDK } from "./shared/config.js";
 import * as vm from "node:vm";
 
-const { registerFunction } = init(ENGINE_URL, {
-  workerName: "code-agent",
-});
+const { registerFunction } = initSDK("code-agent");
 
 const DEFAULT_TIMEOUT_MS = 5_000;
 const MAX_TIMEOUT_MS = 30_000;
