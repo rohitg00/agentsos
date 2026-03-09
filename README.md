@@ -2,9 +2,9 @@
 
 Agent Operating System built on three primitives: **Worker**, **Function**, **Trigger**.
 
-**60+ tools** · **2,506 tests** · **25 LLM providers** · **47 models** · **40 channels** · **32K LOC**
+**60+ tools** · **2,556 tests** · **25 LLM providers** · **47 models** · **40 channels** · **35K LOC**
 
-Every capability — agents, memory, security, LLM routing, workflows, tools, swarms, knowledge graphs, session replay, vault — is a plain function registered on an [iii-engine](https://iii.dev) bus. No frameworks, no vendor lock-in, no magic.
+Every capability — agents, memory, security, LLM routing, workflows, tools, swarms, knowledge graphs, session replay, vault, **self-evolving functions** — is a plain function registered on an [iii-engine](https://iii.dev) bus. No frameworks, no vendor lock-in, no magic.
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
@@ -21,6 +21,12 @@ Every capability — agents, memory, security, LLM routing, workflows, tools, sw
 │                   Control Plane (Rust)                       │
 │  realm · hierarchy · directive · mission · ledger            │
 │  council · pulse · bridge (8 crates, 45 functions)           │
+├──────────────────────────────────────────────────────────────┤
+│             Evolve / Eval / Feedback Loop                    │
+│  evolve (LLM code gen + vm sandbox + live registration)      │
+│  eval (pluggable scorers + suites + inline auto-scoring)     │
+│  feedback (review + improve + promote/kill + leaderboard)    │
+│                      (TypeScript)                            │
 ├──────────────────────────────────────────────────────────────┤
 │  api · workflows · tools(60+) · skills · channels · hooks    │
 │  approval · streaming · mcp · a2a · vault · browser · swarm  │
@@ -135,7 +141,7 @@ Every component connects to the iii-engine over WebSocket and registers function
 | `pulse` | Scheduled agent invocation with context-aware ticks | ~250 |
 | `bridge` | External runtime adapters (Process/HTTP/ClaudeCode/Codex/Cursor/OpenCode) | ~300 |
 
-### TypeScript Workers (40)
+### TypeScript Workers (43)
 
 | Worker | Purpose |
 |--------|---------|
@@ -178,6 +184,9 @@ Every component connects to the iii-engine over WebSocket and registers function
 | `telemetry.ts` | OpenTelemetry metrics (SDK-native, auto worker CPU/memory/event-loop) |
 | `cron.ts` | Scheduled jobs (session cleanup, cost aggregation, rate limit reset) |
 | `code-agent.ts` | Specialized coding agent |
+| `evolve.ts` | Dynamic function evolution (LLM code gen + vm sandbox + live registration) |
+| `eval.ts` | Production eval harness (pluggable scorers, suites, inline auto-scoring) |
+| `feedback.ts` | Feedback loop (auto-review, improve/kill, promote, leaderboard) |
 | `channels/*.ts` | 40 channel adapters |
 
 ### Python Workers (1)
@@ -271,6 +280,66 @@ trigger("kg::add_entity", { type: "project", name: "agentos", properties: { ... 
 trigger("kg::add_relation", { from: "agentos", to: "iii-engine", type: "built_on" })
 trigger("kg::query", { entity: "agentos", depth: 2 })
 ```
+
+## Dynamic Function Evolution
+
+Agents can write, register, evaluate, and improve functions at runtime. The evolve-eval-feedback loop turns AgentOS from a static orchestrator into a self-evolving system.
+
+```
+Agent goal/spec
+    ↓
+evolve::generate  →  LLM writes function code
+    ↓
+evolve::register  →  security scan → vm sandbox → register on iii bus
+    ↓
+eval::suite       →  invoke N times → score each → aggregate
+    ↓
+feedback::review  →  analyze scores → KEEP / IMPROVE / KILL
+    ↓                    ↓              ↓
+    ↓               evolve::generate   evolve::unregister
+    ↓               (with feedback)
+    ↓
+feedback::promote →  draft → staging → production
+```
+
+### Evolve (5 functions, 5 endpoints)
+
+```typescript
+trigger("evolve::generate", { goal: "Double a number", name: "doubler", agentId: "agent-1" })
+trigger("evolve::register", { functionId: "evolved::doubler_v1" })
+trigger("evolve::list", { status: "production" })
+```
+
+- LLM generates function code from a goal/spec
+- Code runs in a `node:vm` sandbox (no fetch, fs, process, require, setTimeout, eval)
+- Sandboxed `trigger()` proxy only allows `evolved::`, `tool::`, `llm::` prefixes
+- Pre-registration security scan via `skill::pipeline`
+- Lifecycle: `draft` → `staging` → `production` → `deprecated` → `killed`
+
+### Eval (6 functions, 5 endpoints)
+
+```typescript
+trigger("eval::run", { functionId: "evolved::doubler_v1", input: { value: 5 }, expected: { doubled: 10 } })
+trigger("eval::suite", { suiteId: "suite_doubler" })
+trigger("eval::compare", { functionIdA: "evolved::doubler_v1", functionIdB: "evolved::doubler_v2", testCases: [...] })
+```
+
+- Pluggable scorers: `exact_match`, `llm_judge`, `semantic_similarity`, `custom`
+- Inline auto-scoring on every evolved function call (configurable: auto/sampled/manual/off)
+- Score formula: correctness (50%) + safety (25%) + latency (15%) + cost (10%)
+
+### Feedback (7 functions, 6 endpoints + cron)
+
+```typescript
+trigger("feedback::review", { functionId: "evolved::doubler_v1" })
+trigger("feedback::promote", { functionId: "evolved::doubler_v1", targetStatus: "production" })
+trigger("feedback::leaderboard", {})
+```
+
+- Auto-review every 6 hours via cron
+- Decision algorithm: kill (≥3 failures in last 5), improve (avg < 0.5), keep
+- Recursive improvement: up to 3 attempts with LLM feedback
+- Leaderboard ranking by overall score
 
 ## Session Replay
 
@@ -519,11 +588,14 @@ agentos/
 │   ├── wasm-sandbox/       WASM execution
 │   └── workflow/           Workflow engine
 │
-├── src/                    TypeScript workers (40)
+├── src/                    TypeScript workers (43)
 │   ├── api.ts              OpenAI-compatible API
 │   ├── agent-core.ts       TS agent loop
 │   ├── tools.ts            22 built-in tools
 │   ├── tools-extended.ts   38 extended tools
+│   ├── evolve.ts           Dynamic function evolution
+│   ├── eval.ts             Production eval harness
+│   ├── feedback.ts         Feedback loop
 │   ├── swarm.ts            Multi-agent swarms
 │   ├── knowledge-graph.ts  Entity-relation graph
 │   ├── session-replay.ts   Session recording
@@ -532,7 +604,7 @@ agentos/
 │   ├── security-map.ts     Mutual Authentication Protocol
 │   ├── channels/           40 channel adapters
 │   ├── shared/             Shared utilities
-│   ├── __tests__/          1,439 TypeScript tests
+│   ├── __tests__/          1,489 TypeScript tests
 │   └── ...                 25 more workers
 │
 ├── workers/                Python workers
@@ -546,10 +618,10 @@ agentos/
 
 ## Testing
 
-2,506 tests across three languages:
+2,556 tests across three languages:
 
 ```bash
-npx vitest --run          # 1,439 TypeScript tests (48 files)
+npx vitest --run          # 1,489 TypeScript tests (51 files)
 cargo test --workspace    # 906 Rust tests (10 crates)
 python3 -m pytest         # 161 Python tests
 ```

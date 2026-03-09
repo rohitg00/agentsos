@@ -114,3 +114,80 @@ export interface ToolCall {
   id: string;
   arguments: Record<string, unknown>;
 }
+
+export type EvolveStatus =
+  | "draft"
+  | "staging"
+  | "production"
+  | "deprecated"
+  | "killed";
+
+export interface EvalScores {
+  correctness: number | null;
+  latency_ms: number;
+  cost_tokens: number;
+  safety: number;
+  overall: number;
+}
+
+export interface EvolvedFunction {
+  functionId: string;
+  code: string;
+  description: string;
+  authorAgentId: string;
+  version: number;
+  status: EvolveStatus;
+  createdAt: number;
+  updatedAt: number;
+  evalScores: EvalScores | null;
+  securityReport: {
+    scanSafe: boolean;
+    sandboxPassed: boolean;
+    findingCount: number;
+  };
+  parentVersion?: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface EvalResult {
+  evalId: string;
+  functionId: string;
+  scores: EvalScores;
+  scorerType: string;
+  input: unknown;
+  output: unknown;
+  expected?: unknown;
+  timestamp: number;
+}
+
+export interface EvalSuite {
+  suiteId: string;
+  name: string;
+  functionId: string;
+  testCases: Array<{
+    input: unknown;
+    expected?: unknown;
+    scorer?: "exact_match" | "llm_judge" | "semantic_similarity" | "custom";
+    scorerFunctionId?: string;
+    weight?: number;
+  }>;
+  createdAt: number;
+}
+
+export interface FeedbackPolicy {
+  minScoreToKeep: number;
+  minEvalsToPromote: number;
+  maxFailuresToKill: number;
+  autoReviewIntervalMs: number;
+}
+
+export interface ReviewResult {
+  decisionId: string;
+  functionId: string;
+  decision: "keep" | "improve" | "kill";
+  reason: string;
+  avgOverall: number;
+  recentFailures: number;
+  evalCount: number;
+  timestamp: number;
+}
