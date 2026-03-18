@@ -1,12 +1,20 @@
-import { initSDK, createSecretGetter } from "../shared/config.js";
+import { registerWorker } from "iii-sdk";
+import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "../shared/config.js";
+import { createSecretGetter } from "../shared/secrets.js";
 import {
   splitMessage,
   resolveAgent,
   verifySlackSignature,
 } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-slack");
-const getSecret = createSecretGetter(trigger);
+const sdk = registerWorker(ENGINE_URL, {
+  workerName: "channel-slack",
+  otel: OTEL_CONFIG,
+});
+registerShutdown(sdk);
+const { registerFunction, registerTrigger, trigger } = sdk;
+
+const getSecret = createSecretGetter(sdk.trigger.bind(sdk));
 
 registerFunction(
   { id: "channel::slack::events", description: "Handle Slack Events API" },
@@ -32,12 +40,15 @@ registerFunction(
 
     if (event.event?.type === "message" && !event.event.bot_id) {
       const msg = event.event;
-      const agentId = await resolveAgent(trigger, "slack", msg.channel);
+      const agentId = await resolveAgent(sdk, "slack", msg.channel);
 
-      const response: any = await trigger("agent::chat", {
-        agentId,
-        message: msg.text,
-        sessionId: `slack:${msg.channel}:${msg.thread_ts || msg.ts}`,
+      const response: any = await trigger({
+        function_id: "agent::chat",
+        payload: {
+          agentId,
+          message: msg.text,
+          sessionId: `slack:${msg.channel}:${msg.thread_ts || msg.ts}`,
+        },
       });
 
       await sendMessage(msg.channel, response.content, msg.thread_ts || msg.ts);

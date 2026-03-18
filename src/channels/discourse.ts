@@ -1,8 +1,16 @@
-import { initSDK, createSecretGetter } from "../shared/config.js";
+import { registerWorker, TriggerAction } from "iii-sdk";
+import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "../shared/config.js";
+import { createSecretGetter } from "../shared/secrets.js";
 import { splitMessage, resolveAgent } from "../shared/utils.js";
 
-const { registerFunction, registerTrigger, trigger, triggerVoid } = initSDK("channel-discourse");
-const getSecret = createSecretGetter(trigger);
+const sdk = registerWorker(ENGINE_URL, {
+  workerName: "channel-discourse",
+  otel: OTEL_CONFIG,
+});
+registerShutdown(sdk);
+const { registerFunction, registerTrigger, trigger } = sdk;
+
+const getSecret = createSecretGetter(sdk.trigger.bind(sdk));
 
 registerFunction(
   {
@@ -19,20 +27,27 @@ registerFunction(
     const text = post.raw;
     const username = post.username;
 
-    const agentId = await resolveAgent(trigger, "discourse", String(topicId));
+    const agentId = await resolveAgent(sdk, "discourse", String(topicId));
 
-    const response: any = await trigger("agent::chat", {
-      agentId,
-      message: text,
-      sessionId: `discourse:${topicId}`,
+    const response: any = await trigger({
+      function_id: "agent::chat",
+      payload: {
+        agentId,
+        message: text,
+        sessionId: `discourse:${topicId}`,
+      },
     });
 
     await sendMessage(topicId, response.content);
 
-    triggerVoid("security::audit", {
-      type: "channel_message",
-      agentId,
-      detail: { channel: "discourse", topicId, username },
+    trigger({
+      function_id: "security::audit",
+      payload: {
+        type: "channel_message",
+        agentId,
+        detail: { channel: "discourse", topicId, username },
+      },
+      action: TriggerAction.Void(),
     });
 
     return { status_code: 200, body: { ok: true } };
