@@ -532,7 +532,7 @@ impl App {
         let agent_id = if self.chat_agent.is_empty() {
             self.agents.first()
                 .and_then(|a| a["id"].as_str().or(a["name"].as_str()))
-                .unwrap_or("default")
+                .unwrap_or("brain")
                 .to_string()
         } else {
             self.chat_agent.clone()
@@ -1283,7 +1283,7 @@ fn draw_chat(f: &mut Frame, app: &App, area: Rect) {
     let agent_label = if app.chat_agent.is_empty() {
         app.agents.first()
             .and_then(|a| a["name"].as_str())
-            .unwrap_or("default")
+            .unwrap_or("brain")
     } else {
         &app.chat_agent
     };
