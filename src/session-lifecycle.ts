@@ -118,15 +118,30 @@ registerFunction(
       reason,
     });
 
-    const reactions: any[] = await safeCall(
-      () =>
-        trigger({
-          function_id: "state::list",
-          payload: { scope: `lifecycle_reactions:${agentId}` },
-        }),
-      [],
-      { operation: "list_reactions" },
-    );
+    const [agentReactions, globalReactions] = await Promise.all([
+      safeCall(
+        () =>
+          trigger({
+            function_id: "state::list",
+            payload: { scope: `lifecycle_reactions:${agentId}` },
+          }),
+        [],
+        { operation: "list_agent_reactions" },
+      ),
+      safeCall(
+        () =>
+          trigger({
+            function_id: "state::list",
+            payload: { scope: "lifecycle_reactions" },
+          }),
+        [],
+        { operation: "list_global_reactions" },
+      ),
+    ]);
+    const reactions = [
+      ...agentReactions.map((r: any) => ({ ...r, _scope: `lifecycle_reactions:${agentId}` })),
+      ...globalReactions.map((r: any) => ({ ...r, _scope: "lifecycle_reactions" })),
+    ];
 
     for (const r of reactions) {
       const reaction: Reaction = r.value;
@@ -173,7 +188,7 @@ registerFunction(
       await trigger({
         function_id: "state::update",
         payload: {
-          scope: `lifecycle_reactions:${agentId}`,
+          scope: r._scope || `lifecycle_reactions:${agentId}`,
           key: reaction.id,
           operations: [
             { type: "increment", path: "attempts", value: 1 },

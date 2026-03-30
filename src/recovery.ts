@@ -363,8 +363,7 @@ registerFunction(
             (a) =>
               a.lifecycle === "failed" ||
               a.lifecycle === "blocked" ||
-              a.lifecycle === "degraded" ||
-              a.stale ||
+              (a.lastActivity !== null && Date.now() - a.lastActivity > 60 * 60 * 1000) ||
               a.circuitBreakerOpen ||
               !a.memoryHealthy,
           )
