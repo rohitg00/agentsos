@@ -257,23 +257,26 @@ registerFunction(
     if (classified.classification === "healthy") {
       action = "none";
     } else if (classified.classification === "degraded") {
-      triggerVoid("tool::agent_send", {
-        targetAgentId: agentId,
-        message: "Health check: your session appears stale. Resuming activity.",
-      });
-      triggerVoid("lifecycle::transition", {
-        agentId,
-        newState: "working",
-        reason: "Recovery wake-up",
-      });
-      action = "wake_up";
-    } else if (classified.classification === "dead") {
-      if (classified.checks.circuitBreakerOpen) {
+      const transitionResult: any = await safeCall(
+        () =>
+          trigger({
+            function_id: "lifecycle::transition",
+            payload: { agentId, newState: "working", reason: "Recovery wake-up" },
+          }),
+        null,
+        { agentId, operation: "lifecycle_transition_wakeup" },
+      );
+      if (transitionResult?.transitioned) {
         triggerVoid("tool::agent_send", {
           targetAgentId: agentId,
-          message:
-            "Circuit breaker open. Resetting and restarting.",
+          message: "Health check: your session appears stale. Resuming activity.",
         });
+        action = "wake_up";
+      } else {
+        action = "none";
+      }
+    } else if (classified.classification === "dead") {
+      if (classified.checks.circuitBreakerOpen) {
         await safeCall(
           () =>
             trigger({
@@ -288,12 +291,27 @@ registerFunction(
           { agentId, operation: "reset_circuit_breaker" },
         );
       }
-      triggerVoid("lifecycle::transition", {
-        agentId,
-        newState: "recovering",
-        reason: "Recovery restart",
-      });
-      action = "restart";
+      const transitionResult: any = await safeCall(
+        () =>
+          trigger({
+            function_id: "lifecycle::transition",
+            payload: { agentId, newState: "recovering", reason: "Recovery restart" },
+          }),
+        null,
+        { agentId, operation: "lifecycle_transition_restart" },
+      );
+      if (transitionResult?.transitioned) {
+        const restartMsg = classified.checks.circuitBreakerOpen
+          ? "Circuit breaker open. Resetting and restarting."
+          : "Recovery: session detected as inactive. Restarting.";
+        triggerVoid("tool::agent_send", {
+          targetAgentId: agentId,
+          message: restartMsg,
+        });
+        action = "restart";
+      } else {
+        action = "none";
+      }
     } else {
       triggerVoid("hook::fire", {
         type: "RecoveryEscalation",
@@ -345,6 +363,8 @@ registerFunction(
             (a) =>
               a.lifecycle === "failed" ||
               a.lifecycle === "blocked" ||
+              a.lifecycle === "degraded" ||
+              a.stale ||
               a.circuitBreakerOpen ||
               !a.memoryHealthy,
           )

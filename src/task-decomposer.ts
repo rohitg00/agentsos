@@ -3,7 +3,7 @@ import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
-import { stripCodeFences } from "./shared/utils.js";
+import { stripCodeFences, requireAuth } from "./shared/utils.js";
 
 const log = createLogger("task-decomposer");
 const sdk = registerWorker(ENGINE_URL, { workerName: "task-decomposer", otel: OTEL_CONFIG });
@@ -36,6 +36,7 @@ registerFunction(
     metadata: { category: "task" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { description, rootId: existingRootId, parentId, depth, model } =
       req.body || req;
 
@@ -153,6 +154,7 @@ registerFunction(
     metadata: { category: "task" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { rootId, taskId } = req.body || req;
 
     if (!rootId || !taskId) {
@@ -179,6 +181,7 @@ registerFunction(
     metadata: { category: "task" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { rootId, taskId, status } = req.body || req;
 
     if (!rootId || !taskId || !status) {
@@ -269,6 +272,7 @@ registerFunction(
     metadata: { category: "task" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { rootId, status } = req.body || req;
 
     if (!rootId) {
@@ -301,6 +305,7 @@ registerFunction(
     metadata: { category: "task" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { rootId } = req.body || req;
 
     if (!rootId) {

@@ -46,6 +46,9 @@ const mockTrigger = vi.fn(async (fnId: string, data?: any): Promise<any> => {
     if (handler) return handler(data);
     return null;
   }
+  if (fnId === "lifecycle::transition") {
+    return { transitioned: true };
+  }
   return null;
 });
 const mockTriggerVoid = vi.fn();
@@ -170,9 +173,9 @@ describe("recovery::recover", () => {
 
     const result = await call("recovery::recover", { agentId: "a1" });
     expect(result.action).toBe("restart");
-    expect(mockTriggerVoid).toHaveBeenCalledWith(
+    expect(mockTrigger).toHaveBeenCalledWith(
       "lifecycle::transition",
-      expect.objectContaining({ newState: "recovering" }),
+      expect.objectContaining({ agentId: "a1", newState: "recovering" }),
     );
   });
 

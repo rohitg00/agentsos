@@ -3,6 +3,7 @@ import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
+import { requireAuth } from "./shared/utils.js";
 
 const log = createLogger("session-lifecycle");
 
@@ -58,15 +59,9 @@ registerFunction(
     description: "Move session to new state, validate transition, fire reactions",
     metadata: { category: "lifecycle" },
   },
-  async ({
-    agentId,
-    newState,
-    reason,
-  }: {
-    agentId: string;
-    newState: LifecycleState;
-    reason?: string;
-  }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId, newState, reason } = req.body || req;
     const current: any = await safeCall(
       () =>
         trigger({
@@ -204,7 +199,9 @@ registerFunction(
     description: "Get current lifecycle state for a session",
     metadata: { category: "lifecycle" },
   },
-  async ({ agentId }: { agentId: string }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId } = req.body || req;
     const state: any = await safeCall(
       () =>
         trigger({
@@ -224,21 +221,9 @@ registerFunction(
     description: "Register a declarative reaction rule for state transitions",
     metadata: { category: "lifecycle" },
   },
-  async ({
-    agentId,
-    from,
-    to,
-    action,
-    payload,
-    escalateAfter = 3,
-  }: {
-    agentId: string;
-    from: LifecycleState;
-    to: LifecycleState;
-    action: Reaction["action"];
-    payload?: Record<string, unknown>;
-    escalateAfter?: number;
-  }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId, from, to, action, payload, escalateAfter = 3 } = req.body || req;
     const id = `rxn_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     const reaction: Reaction = {
       id,
@@ -265,7 +250,9 @@ registerFunction(
     description: "List configured reaction rules",
     metadata: { category: "lifecycle" },
   },
-  async ({ agentId }: { agentId?: string } = {}) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId } = req.body || req || {};
     const scope = agentId ? `lifecycle_reactions:${agentId}` : "lifecycle_reactions";
     const all: any[] = await safeCall(
       () =>

@@ -2,7 +2,7 @@ import { registerWorker, TriggerAction } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
-import { stripCodeFences } from "./shared/utils.js";
+import { stripCodeFences, requireAuth } from "./shared/utils.js";
 
 const log = createLogger("memory-reflection");
 
@@ -25,15 +25,9 @@ registerFunction(
     description: "Increment turn counter, decide whether to trigger memory reflection",
     metadata: { category: "reflect" },
   },
-  async ({
-    agentId,
-    sessionId,
-    iterations = 0,
-  }: {
-    agentId: string;
-    sessionId: string;
-    iterations?: number;
-  }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId, sessionId, iterations = 0 } = req.body || req;
     const scope = `reflect:${agentId}`;
     const key = sessionId || "default";
 
@@ -71,13 +65,9 @@ registerFunction(
     description: "LLM reviews conversation, extracts durable facts for long-term memory",
     metadata: { category: "reflect" },
   },
-  async ({
-    agentId,
-    sessionId,
-  }: {
-    agentId: string;
-    sessionId: string;
-  }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId, sessionId } = req.body || req;
     const memories: any = await trigger({
       function_id: "memory::recall",
       payload: { agentId, query: "recent conversation context", limit: 30 },
@@ -183,15 +173,9 @@ registerFunction(
     description: "Check if conversation yielded a reusable skill via evolve::generate",
     metadata: { category: "reflect" },
   },
-  async ({
-    agentId,
-    sessionId,
-    iterations = 0,
-  }: {
-    agentId: string;
-    sessionId: string;
-    iterations?: number;
-  }) => {
+  async (req: any) => {
+    if (req.headers) requireAuth(req);
+    const { agentId, sessionId, iterations = 0 } = req.body || req;
     if (iterations < 5) return { created: false };
 
     const memories: any = await trigger({

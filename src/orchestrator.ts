@@ -4,6 +4,7 @@ import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
 import { stripCodeFences } from "./shared/utils.js";
+import { requireAuth } from "./shared/utils.js";
 
 const log = createLogger("orchestrator");
 const sdk = registerWorker(ENGINE_URL, { workerName: "orchestrator", otel: OTEL_CONFIG });
@@ -36,6 +37,7 @@ registerFunction(
     metadata: { category: "orchestrator" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { description, model } = req.body || req;
 
     if (!description) {
@@ -100,6 +102,7 @@ registerFunction(
     metadata: { category: "orchestrator" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { planId } = req.body || req;
 
     if (!planId) {
@@ -195,6 +198,7 @@ registerFunction(
     metadata: { category: "orchestrator" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { planId } = req.body || req;
 
     if (!planId) {
@@ -278,6 +282,7 @@ registerFunction(
     metadata: { category: "orchestrator" },
   },
   async (req: any) => {
+    if (req.headers) requireAuth(req);
     const { planId, action, redirectTo } = req.body || req;
 
     if (!planId || !action) {

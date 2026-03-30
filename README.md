@@ -481,7 +481,7 @@ trigger("feedback::inject_signal", {
   agentId: "agent-1",
   signalType: "ci_failure",
   content: "Build failed: TypeError in auth.ts line 42",
-  source: "github-actions",
+  metadata: { source: "github-actions" },
 })
 ```
 
