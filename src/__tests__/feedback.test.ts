@@ -70,14 +70,6 @@ vi.mock("../shared/utils.js", () => ({
   requireAuth: vi.fn(),
 }));
 
-vi.mock("../shared/logger.js", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  }),
-}));
 
 vi.mock("../shared/metrics.js", () => ({
   createRecordMetric: () => vi.fn(),

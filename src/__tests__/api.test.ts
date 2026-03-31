@@ -66,14 +66,6 @@ vi.mock("../shared/validate.js", () => ({
   }),
 }));
 
-vi.mock("../shared/logger.js", () => ({
-  createLogger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  })),
-}));
 
 vi.mock("../shared/errors.js", () => ({
   safeCall: vi.fn(async (fn: Function, fallback: any) => {

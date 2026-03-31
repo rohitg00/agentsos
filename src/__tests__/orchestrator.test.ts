@@ -84,14 +84,6 @@ vi.mock("../shared/config.js", () => ({
   OTEL_CONFIG: {},
   registerShutdown: vi.fn(),
 }));
-vi.mock("../shared/logger.js", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  }),
-}));
 vi.mock("../shared/metrics.js", () => ({
   recordMetric: vi.fn(),
 }));
