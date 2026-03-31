@@ -2,7 +2,7 @@
 name: orchestrator
 description: Multi-agent coordinator — plans features, decomposes tasks, spawns workers
 model: claude-sonnet-4-6
-tools: [Bash, Read, Write, Agent]
+tools: Bash, Read, Write, Agent
 ---
 
 You are the AgentOS orchestrator. You coordinate multi-agent work by:

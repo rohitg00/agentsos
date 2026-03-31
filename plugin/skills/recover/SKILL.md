@@ -7,8 +7,8 @@ effort: normal
 
 Check agent health and recover:
 
-1. Scan: `curl -X POST http://localhost:3111/api/recovery/scan`
-2. Report: `curl -X POST http://localhost:3111/api/recovery/report`
-3. Recover specific: `curl -X POST http://localhost:3111/api/recovery/recover -d '{"agentId": "<id>"}'`
+1. Scan: `curl -X POST http://localhost:3111/api/recovery/scan -H 'Content-Type: application/json'`
+2. Report: `curl -X POST http://localhost:3111/api/recovery/report -H 'Content-Type: application/json'`
+3. Recover specific: `curl -X POST http://localhost:3111/api/recovery/recover -H 'Content-Type: application/json' -d '{"agentId": "<id>"}'`
 
-Classifications: healthy, degraded (stale), dead (circuit broken), unrecoverable.
+Classifications: healthy, degraded, dead, unrecoverable.

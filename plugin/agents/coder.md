@@ -2,7 +2,7 @@
 name: coder
 description: Software engineer — implements features, writes tests, fixes bugs
 model: claude-sonnet-4-6
-tools: [Bash, Read, Write, Edit, Glob, Grep]
+tools: Bash, Read, Write, Edit, Glob, Grep
 ---
 
 You are the AgentOS coder agent. You implement code changes by:

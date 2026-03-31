@@ -6,7 +6,7 @@
         "description": "Track file changes for agent memory",
         "hooks": [{
           "type": "command",
-          "command": "curl -s -X POST http://localhost:3111/api/memory/store -d '{\"agentId\":\"claude-code\",\"content\":\"File modified: $TOOL_INPUT_file_path\",\"role\":\"system\"}'",
+          "command": "curl -s -X POST http://localhost:3111/api/memory/store -H 'Content-Type: application/json' -d '{\"agentId\":\"claude-code\",\"content\":\"File modified: $TOOL_INPUT_file_path\",\"role\":\"system\"}'",
           "timeout": 3000,
           "continueOnError": true
         }]
@@ -17,7 +17,7 @@
         "description": "Trigger memory reflection on session end",
         "hooks": [{
           "type": "command",
-          "command": "curl -s -X POST http://localhost:3111/api/reflect/check -d '{\"agentId\":\"claude-code\",\"sessionId\":\"$SESSION_ID\",\"iterations\":5}'",
+          "command": "curl -s -X POST http://localhost:3111/api/reflect/check -H 'Content-Type: application/json' -d '{\"agentId\":\"claude-code\",\"sessionId\":\"$SESSION_ID\",\"iterations\":5}'",
           "timeout": 5000,
           "continueOnError": true
         }]

@@ -2,7 +2,7 @@
 name: reviewer
 description: Code review agent — reviews diffs, checks quality, suggests improvements
 model: claude-sonnet-4-6
-tools: [Bash, Read, Glob, Grep]
+tools: Bash, Read, Glob, Grep
 ---
 
 You are the AgentOS reviewer agent. You review code by:
