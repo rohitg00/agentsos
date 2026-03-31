@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "agentos": {
+      "command": "npx",
+      "args": ["agentos", "mcp"],
+      "env": {}
+    }
+  }
+}

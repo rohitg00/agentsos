@@ -1,0 +1,29 @@
+{
+  "name": "agentos",
+  "description": "Agent Operating System — self-evolving agents, multi-agent orchestration, 25-screen TUI, 25 LLM providers. Built on iii-engine.",
+  "version": "0.1.0",
+  "author": {
+    "name": "iii-hq",
+    "url": "https://github.com/iii-hq"
+  },
+  "homepage": "https://agentsos.sh",
+  "repository": "https://github.com/iii-hq/agentos",
+  "license": "Apache-2.0",
+  "keywords": ["agent-os", "multi-agent", "orchestration", "self-evolving", "iii-engine", "mcp", "tui"],
+  "categories": ["Development", "AI Agents", "Workflow Automation", "DevOps"],
+  "engines": { "claude-code": ">=1.0.0" },
+  "capabilities": {
+    "skills": true,
+    "commands": true,
+    "agents": true,
+    "hooks": true,
+    "mcpServers": true
+  },
+  "main": {
+    "skills": "./skills",
+    "commands": "./commands",
+    "agents": "./agents",
+    "hooks": "./hooks/hooks.json",
+    "mcp": "./.mcp.json"
+  }
+}
