@@ -9,7 +9,7 @@ const sdk = registerWorker(ENGINE_URL, {
 registerShutdown(sdk);
 const { registerFunction, registerTrigger, trigger } = sdk;
 const triggerVoid = (id: string, payload: unknown) =>
-  sdk.trigger({ function_id: id, payload, action: TriggerAction.Void() });
+  trigger({ function_id: id, payload, action: TriggerAction.Void() });
 
 type ApprovalTier = "auto" | "async" | "sync";
 
