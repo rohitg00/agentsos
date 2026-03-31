@@ -22,7 +22,7 @@
 </p>
 
 <p align="center">
-  <a href="https://agentos.sh">Website</a> ·
+  <a href="https://agentsos.sh">Website</a> ·
   <a href="#quickstart">Quickstart</a> ·
   <a href="#what-makes-this-different">Why AgentOS</a> ·
   <a href="#architecture">Architecture</a> ·
