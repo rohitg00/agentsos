@@ -36,7 +36,8 @@ registerFunction(
     description: "List all agents and validate each in parallel",
     metadata: { category: "recovery" },
   },
-  async () => {
+  async (req: any) => {
+    if (req?.headers) requireAuth(req);
     const agents: any[] = await safeCall(
       () => trigger({ function_id: "state::list", payload: { scope: "agents" } }),
       [],
@@ -343,7 +344,8 @@ registerFunction(
     description: "Scan all agents and auto-recover unhealthy ones in parallel",
     metadata: { category: "recovery" },
   },
-  async () => {
+  async (req: any) => {
+    if (req?.headers) requireAuth(req);
     const scanResult: any = await trigger({
       function_id: "recovery::scan",
       payload: {},

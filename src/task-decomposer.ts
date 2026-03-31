@@ -166,10 +166,11 @@ registerFunction(
     }
 
     const rootId = sanitizeId(rawRootId);
+    const safeTaskId = sanitizeId(taskId);
 
     const task = await trigger({
       function_id: "state::get",
-      payload: { scope: `tasks:${rootId}`, key: taskId },
+      payload: { scope: `tasks:${rootId}`, key: safeTaskId },
     });
 
     if (!task) {
@@ -198,6 +199,7 @@ registerFunction(
     }
 
     const rootId = sanitizeId(rawRootId);
+    const safeTaskId = sanitizeId(taskId);
 
     const validStatuses: TaskStatus[] = [
       "pending",

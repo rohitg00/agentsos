@@ -446,7 +446,10 @@ impl App {
                         }
                         if !obj.contains_key("since") {
                             let ts = obj.get("transitionedAt").and_then(|v| v.as_u64());
-                            let since_str = ts.map(|t| format!("{}s ago", (std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64 - t) / 1000)).unwrap_or_else(|| "-".into());
+                            let since_str = ts.map(|t| {
+                                let now_ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap_or_default().as_millis() as u64;
+                                format!("{}s ago", now_ms.saturating_sub(t) / 1000)
+                            }).unwrap_or_else(|| "-".into());
                             obj.insert("since".into(), Value::String(since_str));
                         }
                         Some(data)
@@ -489,7 +492,9 @@ impl App {
                 }
             }
             Screen::Orchestrator => {
-                if let Ok(resp) = client.get(format!("{}/api/orchestrator/status", API_BASE)).send().await
+                if let Ok(resp) = client.post(format!("{}/api/orchestrator/status", API_BASE))
+                    .json(&serde_json::json!({}))
+                    .send().await
                     && let Ok(data) = resp.json::<Value>().await
                 {
                     self.orchestrator_plans = data["plans"].as_array().cloned()
@@ -2025,6 +2030,19 @@ fn draw_tasks(f: &mut Frame, app: &App, block: Block, area: Rect) {
         let task_status = task["status"].as_str().unwrap_or("pending");
 
         let depth = task_id.matches('.').count();
+
+        if depth > 0 {
+            let mut hidden = false;
+            let mut ancestor = task_id.to_string();
+            while let Some(pos) = ancestor.rfind('.') {
+                ancestor.truncate(pos);
+                if !app.task_expanded.contains(ancestor.as_str()) {
+                    hidden = true;
+                    break;
+                }
+            }
+            if hidden { continue; }
+        }
         let indent = "  ".repeat(depth);
 
         let status_icon = match task_status {

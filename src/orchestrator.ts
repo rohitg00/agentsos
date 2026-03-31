@@ -411,8 +411,13 @@ registerFunction(
 
     const safePlanId = sanitizeId(planId);
     const safeKey = sanitizeId(key);
+    const safeAgentId = agentId ? sanitizeId(agentId) : undefined;
 
-    const writtenBy = req.headers ? "authenticated" : (agentId || "system");
+    if (req.headers && safeKey === "_meta") {
+      throw Object.assign(new Error("_meta is reserved"), { statusCode: 403 });
+    }
+
+    const writtenBy = req.headers ? "authenticated" : (safeAgentId || "system");
     const entry = {
       key: safeKey,
       value,
@@ -425,7 +430,7 @@ registerFunction(
       payload: { scope: `workspace:${safePlanId}`, key: safeKey, value: entry },
     });
 
-    log.info("Scratchpad write", { planId: safePlanId, key: safeKey, agentId });
+    log.info("Workspace write", { planId: safePlanId, key: safeKey, writtenBy });
 
     return { written: true, key: safeKey, planId: safePlanId };
   },
