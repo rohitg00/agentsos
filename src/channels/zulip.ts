@@ -10,7 +10,7 @@ const sdk = registerWorker(ENGINE_URL, {
 registerShutdown(sdk);
 const { registerFunction, registerTrigger, trigger } = sdk;
 
-const getSecret = createSecretGetter(sdk.trigger.bind(sdk));
+const getSecret = createSecretGetter(trigger);
 
 registerFunction(
   { id: "channel::zulip::webhook", description: "Handle Zulip bot webhook" },

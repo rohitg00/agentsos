@@ -1,4 +1,4 @@
-import { registerWorker, TriggerAction } from "iii-sdk";
+import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import {
   ENGINE_URL,
   OTEL_CONFIG,
@@ -13,10 +13,9 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import { assertNoSsrf } from "./shared/utils.js";
 import { safeCall } from "./shared/errors.js";
-import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 
-const log = createLogger("tools");
+const log = new Logger();
 const execFileAsync = promisify(execFile);
 
 const sdk = registerWorker(ENGINE_URL, {

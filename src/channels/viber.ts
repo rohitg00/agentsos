@@ -10,7 +10,7 @@ const sdk = registerWorker(ENGINE_URL, {
 registerShutdown(sdk);
 const { registerFunction, registerTrigger, trigger } = sdk;
 
-const getSecret = createSecretGetter(sdk.trigger.bind(sdk));
+const getSecret = createSecretGetter(trigger);
 const API_URL = "https://chatapi.viber.com/pa/send_message";
 
 registerFunction(

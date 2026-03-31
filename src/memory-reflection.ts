@@ -1,10 +1,9 @@
-import { registerWorker, TriggerAction } from "iii-sdk";
+import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
-import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 import { stripCodeFences, requireAuth } from "./shared/utils.js";
 
-const log = createLogger("memory-reflection");
+const log = new Logger();
 
 const sdk = registerWorker(ENGINE_URL, {
   workerName: "memory-reflection",

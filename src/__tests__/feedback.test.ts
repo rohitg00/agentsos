@@ -63,6 +63,7 @@ vi.mock("iii-sdk", () => ({
     shutdown: vi.fn(),
   }),
   TriggerAction: { Void: () => ({}) },
+  Logger: class { info() {} warn() {} error() {} },
 }));
 
 vi.mock("../shared/utils.js", () => ({

@@ -91,6 +91,7 @@ vi.mock("iii-sdk", () => ({
     listFunctions: mockListFunctions,
   }),
   TriggerAction: { Void: () => ({}) },
+  Logger: class { info() {} warn() {} error() {} },
   getContext: vi.fn(() => ({
     logger: null,
     meter: {
