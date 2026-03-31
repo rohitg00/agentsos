@@ -1,11 +1,10 @@
-import { registerWorker, TriggerAction } from "iii-sdk";
+import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createHash } from "crypto";
 import { safeCall } from "./shared/errors.js";
-import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 
-const log = createLogger("memory");
+const log = new Logger();
 
 const sdk = registerWorker(ENGINE_URL, {
   workerName: "memory",

@@ -91,6 +91,7 @@ vi.mock("iii-sdk", () => ({
     listFunctions: mockListFunctions,
   }),
   TriggerAction: { Void: () => ({}) },
+  Logger: class { info() {} warn() {} error() {} },
   getContext: vi.fn(() => ({
     logger: null,
     meter: {
@@ -132,14 +133,6 @@ vi.mock("../shared/shutdown.js", () => ({
   },
 }));
 
-vi.mock("../shared/logger.js", () => ({
-  createLogger: vi.fn(() => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  })),
-}));
 
 vi.mock("../tool-profiles.js", () => ({
   filterToolsByProfile: vi.fn((tools: any[], profile: string) => {

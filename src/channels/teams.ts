@@ -10,7 +10,7 @@ const sdk = registerWorker(ENGINE_URL, {
 registerShutdown(sdk);
 const { registerFunction, registerTrigger, trigger } = sdk;
 
-const getSecret = createSecretGetter(sdk.trigger.bind(sdk));
+const getSecret = createSecretGetter(trigger);
 
 const AUTH_URL =
   "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";

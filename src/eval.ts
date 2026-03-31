@@ -1,6 +1,5 @@
-import { registerWorker, TriggerAction } from "iii-sdk";
+import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
-import { createLogger } from "./shared/logger.js";
 import { createRecordMetric } from "./shared/metrics.js";
 import { requireAuth } from "./shared/utils.js";
 import { safeCall } from "./shared/errors.js";
@@ -15,7 +14,7 @@ const { registerFunction, registerTrigger, trigger } = sdk;
 const triggerVoid = (id: string, payload: unknown) =>
   trigger({ function_id: id, payload, action: TriggerAction.Void() });
 
-const log = createLogger("eval");
+const log = new Logger();
 const recordMetric = createRecordMetric(triggerVoid);
 
 const SCORE_WEIGHTS = {

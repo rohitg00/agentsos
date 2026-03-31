@@ -76,20 +76,13 @@ vi.mock("iii-sdk", () => ({
     shutdown: vi.fn(),
   }),
   TriggerAction: { Void: () => ({}) },
+  Logger: class { info() {} warn() {} error() {} },
 }));
 
 vi.mock("../shared/config.js", () => ({
   ENGINE_URL: "ws://localhost:3111",
   OTEL_CONFIG: {},
   registerShutdown: vi.fn(),
-}));
-vi.mock("../shared/logger.js", () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    warn: vi.fn(),
-    error: vi.fn(),
-    debug: vi.fn(),
-  }),
 }));
 vi.mock("../shared/metrics.js", () => ({
   recordMetric: vi.fn(),

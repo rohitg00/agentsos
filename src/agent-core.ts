@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { registerWorker, TriggerAction } from "iii-sdk";
+import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import type {
   AgentConfig,
@@ -11,25 +11,18 @@ import type {
 import { filterToolsByProfile } from "./tool-profiles.js";
 import { safeCall } from "./shared/errors.js";
 import { shutdownManager } from "./shared/shutdown.js";
-import { createLogger } from "./shared/logger.js";
 import { recordMetric } from "./shared/metrics.js";
 
-const log = createLogger("agent-core");
+const log = new Logger();
 
 const sdk = registerWorker(ENGINE_URL, {
   workerName: "agent-core",
   otel: OTEL_CONFIG,
 });
 registerShutdown(sdk);
-const { registerFunction, registerTrigger, listFunctions } = sdk;
-const trigger = (id: string, payload: unknown, timeoutMs?: number) =>
-  sdk.trigger(
-    timeoutMs !== undefined
-      ? { function_id: id, payload, timeoutMs }
-      : { function_id: id, payload },
-  );
+const { registerFunction, registerTrigger, listFunctions, trigger } = sdk;
 const triggerVoid = (id: string, payload: unknown) =>
-  sdk.trigger({ function_id: id, payload, action: TriggerAction.Void() });
+  trigger({ function_id: id, payload, action: TriggerAction.Void() });
 
 const MAX_ITERATIONS = 50;
 const TOOL_TIMEOUT_MS = 120_000;
@@ -41,8 +34,8 @@ function earlyResponse(content: string): ChatResponse {
   return { content, model: undefined, usage: undefined, iterations: 0 };
 }
 
-type TriggerFn = typeof trigger;
-type TriggerVoidFn = typeof triggerVoid;
+type TriggerFn = (req: { function_id: string; payload: unknown; timeoutMs?: number }) => Promise<any>;
+type TriggerVoidFn = (id: string, payload: unknown) => void;
 
 async function validateRequest(
   input: ChatRequest,
@@ -63,7 +56,7 @@ async function validateRequest(
   const { agentId } = input;
 
   const agentRate: any = await safeCall(
-    () => triggerFn("rate::check_agent", { agentId, operation: "message" }, 10_000),
+    () => triggerFn({ function_id: "rate::check_agent", payload: { agentId, operation: "message" }, timeoutMs: 10_000 }),
     { allowed: false, retryAfter: 60 },
     { agentId, operation: "rate_check_agent" },
   );
@@ -74,7 +67,7 @@ async function validateRequest(
   }
 
   const concSlot: any = await safeCall(
-    () => triggerFn("rate::acquire_concurrent", { agentId }, 10_000),
+    () => triggerFn({ function_id: "rate::acquire_concurrent", payload: { agentId }, timeoutMs: 10_000 }),
     { acquired: false, current: 0, limit: 0 },
     { agentId, operation: "acquire_concurrent" },
   );
@@ -103,47 +96,47 @@ async function prepareContext(
   sessionId: string | undefined,
   triggerFn: TriggerFn,
 ): Promise<PreparedContext | ChatResponse> {
-  const config: AgentConfig = await triggerFn("state::get", {
+  const config: AgentConfig = await triggerFn({ function_id: "state::get", payload: {
     scope: "agents",
     key: agentId,
-  }, 10_000);
+  }, timeoutMs: 10_000 });
 
   if (!config) {
     return earlyResponse(`Agent ${agentId} not found.`);
   }
 
   const recallHash = createHash("sha256").update(message).digest("hex").slice(0, 16);
-  const memories: any = await triggerFn("context_cache::get_or_fetch", {
+  const memories: any = await triggerFn({ function_id: "context_cache::get_or_fetch", payload: {
     agentId,
     key: `recall:${recallHash}`,
     fetchFunctionId: "memory::recall",
     fetchPayload: { agentId, query: message, limit: 20 },
     ttlMs: 30_000,
-  }, 30_000);
+  }, timeoutMs: 30_000 });
 
   const userProfile: any = await safeCall(
-    () => triggerFn("context_cache::get_or_fetch", {
+    () => triggerFn({ function_id: "context_cache::get_or_fetch", payload: {
       agentId,
       key: "user_profile",
       fetchFunctionId: "memory::user_profile::get",
       fetchPayload: { agentId },
       ttlMs: 60_000,
-    }, 5_000),
+    }, timeoutMs: 5_000 }),
     null,
     { agentId, operation: "get_user_profile" },
   );
 
-  const tools: any = await triggerFn("agent::list_tools", { agentId }, 10_000);
+  const tools: any = await triggerFn({ function_id: "agent::list_tools", payload: { agentId }, timeoutMs: 10_000 });
   const allowedToolIds = new Set<string>(
     tools.map((t: any) => t.function_id || t.id),
   );
 
-  const model = await triggerFn("llm::route", {
+  const model = await triggerFn({ function_id: "llm::route", payload: {
     message,
     toolCount: tools.length,
     config: config?.model,
     agentTier: config?.agentTier,
-  }, 10_000);
+  }, timeoutMs: 10_000 });
 
   let profilePrompt = "";
   if (userProfile) {
@@ -162,7 +155,7 @@ async function prepareContext(
   messages.push({ role: "user", content: message });
 
   const injectionScan: any = await safeCall(
-    () => triggerFn("security::scan_injection", { text: message }, 10_000),
+    () => triggerFn({ function_id: "security::scan_injection", payload: { text: message }, timeoutMs: 10_000 }),
     { riskScore: 1.0, safe: false },
     { agentId, operation: "scan_injection" },
   );
@@ -171,7 +164,7 @@ async function prepareContext(
   }
 
   const budgetStatus: any = await safeCall(
-    () => triggerFn("cost::budget_check", { agentId }, 10_000),
+    () => triggerFn({ function_id: "cost::budget_check", payload: { agentId }, timeoutMs: 10_000 }),
     { withinBudget: false, spent: 0, limit: 0 },
     { agentId, operation: "budget_check" },
   );
@@ -209,12 +202,12 @@ async function executeLlmCall(
   });
 
   const llmStart = Date.now();
-  const response: any = await triggerFn("llm::complete", {
+  const response: any = await triggerFn({ function_id: "llm::complete", payload: {
     model,
     systemPrompt,
     messages,
     tools,
-  }, TOOL_TIMEOUT_MS);
+  }, timeoutMs: TOOL_TIMEOUT_MS });
 
   triggerVoidFn("hook::fire", {
     type: "RequestEnd",
@@ -271,7 +264,7 @@ async function handleCodeAgent(
   }
 
   const detectResult: any = await safeCall(
-    () => triggerFn("agent::code_detect", { response: response.content }, 10_000),
+    () => triggerFn({ function_id: "agent::code_detect", payload: { response: response.content }, timeoutMs: 10_000 }),
     { hasCode: false, blocks: [] },
     { agentId, operation: "code_detect" },
   );
@@ -283,11 +276,11 @@ async function handleCodeAgent(
   let currentResponse = response;
   for (const block of detectResult.blocks) {
     const codeStart = Date.now();
-    const execResult: any = await triggerFn("agent::code_execute", {
+    const execResult: any = await triggerFn({ function_id: "agent::code_execute", payload: {
       code: block,
       agentId,
       timeout: 5000,
-    }, 30_000).catch((err: any) => ({
+    }, timeoutMs: 30_000 }).catch((err: any) => ({
       result: { error: err?.message },
       stdout: "",
       executionTimeMs: 0,
@@ -353,7 +346,7 @@ async function executeToolCall(
   const toolStart = Date.now();
   try {
     const guardResult: any = await safeCall(
-      () => triggerFn("guard::check", { agentId, toolId: tc.id }, 10_000),
+      () => triggerFn({ function_id: "guard::check", payload: { agentId, toolId: tc.id }, timeoutMs: 10_000 }),
       { decision: "block" },
       { agentId, operation: "guard_check" },
     );
@@ -376,11 +369,11 @@ async function executeToolCall(
 
     const tierResult: any = await safeCall(
       () =>
-        triggerFn("approval::decide_tier", {
+        triggerFn({ function_id: "approval::decide_tier", payload: {
           toolId: tc.id,
           agentId,
           args: tc.arguments,
-        }, 10_000),
+        }, timeoutMs: 10_000 }),
       {
         approved: false,
         tier: "sync",
@@ -408,10 +401,10 @@ async function executeToolCall(
 
     const policyResult: any = await safeCall(
       () =>
-        triggerFn("policy::check", {
+        triggerFn({ function_id: "policy::check", payload: {
           agentId,
           resource: tc.id,
-        }, 10_000),
+        }, timeoutMs: 10_000 }),
       { action: "deny" },
       { agentId, operation: "policy_check" },
     );
@@ -426,11 +419,11 @@ async function executeToolCall(
 
     const approval: any = await safeCall(
       () =>
-        triggerFn("approval::check", {
+        triggerFn({ function_id: "approval::check", payload: {
           agentId,
           toolId: tc.id,
           arguments: tc.arguments,
-        }, 10_000),
+        }, timeoutMs: 10_000 }),
       { approved: false, reason: "Approval timeout" },
       { agentId, operation: "approval_check" },
     );
@@ -445,11 +438,11 @@ async function executeToolCall(
 
     const capResult: any = await safeCall(
       () =>
-        triggerFn("security::check_capability", {
+        triggerFn({ function_id: "security::check_capability", payload: {
           agentId,
           capability: tc.id.split("::")[0],
           resource: tc.id,
-        }, 10_000),
+        }, timeoutMs: 10_000 }),
       { decision: "block" },
       { agentId, operation: "check_capability" },
     );
@@ -460,7 +453,7 @@ async function executeToolCall(
       };
     }
 
-    const result = await triggerFn(tc.id, tc.arguments, TOOL_TIMEOUT_MS);
+    const result = await triggerFn({ function_id: tc.id, payload: tc.arguments, timeoutMs: TOOL_TIMEOUT_MS });
 
     triggerVoidFn("hook::fire", {
       type: "AfterToolCall",
@@ -591,12 +584,12 @@ async function toolLoop(
     if (iterations % CONTEXT_HEALTH_CHECK_INTERVAL === 0) {
       const health: any = await safeCall(
         () =>
-          triggerFn("context::health", {
+          triggerFn({ function_id: "context::health", payload: {
             messages,
             maxTokens: (model as any).maxTokens
               ? (model as any).maxTokens * 50
               : 200_000,
-          }, 30_000),
+          }, timeoutMs: 30_000 }),
         { overall: 100 },
         { agentId, operation: "context_health" },
       );
@@ -610,7 +603,7 @@ async function toolLoop(
       if (health.overall < CONTEXT_HEALTH_THRESHOLD) {
         const compressed: any = await safeCall(
           () =>
-            triggerFn("context::compress", {
+            triggerFn({ function_id: "context::compress", payload: {
               messages,
               targetTokens: Math.floor(
                 ((model as any).maxTokens
@@ -618,7 +611,7 @@ async function toolLoop(
                   : 200_000) * 0.7,
               ),
               agentId,
-            }, 30_000),
+            }, timeoutMs: 30_000 }),
           null,
           { agentId, operation: "context_compress" },
         );
@@ -891,10 +884,10 @@ registerFunction(
     metadata: { category: "agent" },
   },
   async ({ agentId }: { agentId: string }) => {
-    const config: AgentConfig = await trigger("state::get", {
+    const config: AgentConfig = await trigger({ function_id: "state::get", payload: {
       scope: "agents",
       key: agentId,
-    }, 10_000);
+    }, timeoutMs: 10_000 });
 
     const allowedCapabilities = config?.capabilities?.tools || ["*"];
     const allFunctions = await listFunctions();
@@ -919,11 +912,11 @@ registerFunction(
   },
   async (config: AgentConfig) => {
     const agentId = config.id || crypto.randomUUID();
-    await trigger("state::set", {
+    await trigger({ function_id: "state::set", payload: {
       scope: "agents",
       key: agentId,
       value: { ...config, id: agentId, createdAt: Date.now() },
-    }, 10_000);
+    }, timeoutMs: 10_000 });
     triggerVoid("publish", {
       topic: "agent.lifecycle",
       data: { type: "created", agentId },
@@ -940,7 +933,7 @@ registerFunction(
     metadata: { category: "agent" },
   },
   async () => {
-    return trigger("state::list", { scope: "agents" }, 10_000);
+    return trigger({ function_id: "state::list", payload: { scope: "agents" }, timeoutMs: 10_000 });
   },
 );
 
@@ -951,7 +944,7 @@ registerFunction(
     metadata: { category: "agent" },
   },
   async ({ agentId }: { agentId: string }) => {
-    await trigger("state::delete", { scope: "agents", key: agentId }, 10_000);
+    await trigger({ function_id: "state::delete", payload: { scope: "agents", key: agentId }, timeoutMs: 10_000 });
     triggerVoid("publish", {
       topic: "agent.lifecycle",
       data: { type: "deleted", agentId },
@@ -967,9 +960,9 @@ registerFunction(
     metadata: { category: "agent" },
   },
   async ({ division }: { division?: Division }) => {
-    const agents: AgentConfig[] = await trigger("state::list", {
+    const agents: AgentConfig[] = await trigger({ function_id: "state::list", payload: {
       scope: "agents",
-    }, 10_000);
+    }, timeoutMs: 10_000 });
     if (!division) return agents;
     return agents.filter((a) => a.persona?.division === division);
   },
