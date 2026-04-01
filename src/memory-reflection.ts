@@ -1,7 +1,8 @@
 import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { recordMetric } from "./shared/metrics.js";
-import { stripCodeFences, requireAuth } from "./shared/utils.js";
+import { stripCodeFences, requireAuth , httpOk } from "./shared/utils.js";
+
 
 const log = new Logger();
 
@@ -54,7 +55,7 @@ registerFunction(
       }
     }
 
-    return { shouldReflect, shouldReviewSkills, turnCount };
+    return httpOk(req, { shouldReflect, shouldReviewSkills, turnCount });
   },
 );
 
@@ -72,7 +73,7 @@ registerFunction(
       payload: { agentId, query: "recent conversation context", limit: 30 },
     }).catch(() => []);
 
-    if (!memories?.length) return { saved: 0 };
+    if (!memories?.length) return httpOk(req, { saved: 0 });
 
     const recentContext = (memories || [])
       .slice(-20)
@@ -117,14 +118,14 @@ Only include facts useful in future conversations. importance >= 0.5 to be store
         },
       });
     } catch {
-      return { saved: 0 };
+      return httpOk(req, { saved: 0 });
     }
 
     let parsed: any;
     try {
       parsed = JSON.parse(stripCodeFences(llmResult?.content || "{}"));
     } catch {
-      return { saved: 0 };
+      return httpOk(req, { saved: 0 });
     }
 
     const facts = Array.isArray(parsed.facts) ? parsed.facts : [];
@@ -162,7 +163,7 @@ Only include facts useful in future conversations. importance >= 0.5 to be store
     });
     log.info("Memory reflection completed", { agentId, saved });
 
-    return { saved, totalFacts: facts.length };
+    return httpOk(req, { saved, totalFacts: facts.length });
   },
 );
 
@@ -175,14 +176,14 @@ registerFunction(
   async (req: any) => {
     if (req.headers) requireAuth(req);
     const { agentId, sessionId, iterations = 0 } = req.body || req;
-    if (iterations < 5) return { created: false };
+    if (iterations < 5) return httpOk(req, { created: false });
 
     const memories: any = await trigger({
       function_id: "memory::recall",
       payload: { agentId, query: "tools used complex workflow", limit: 30 },
     }).catch(() => []);
 
-    if (!memories?.length) return { created: false };
+    if (!memories?.length) return httpOk(req, { created: false });
 
     const recentContext = (memories || [])
       .slice(-30)
@@ -217,7 +218,7 @@ Otherwise output: {"shouldCreate": false}`,
         },
       });
     } catch {
-      return { created: false };
+      return httpOk(req, { created: false });
     }
 
     try {
@@ -241,11 +242,11 @@ Otherwise output: {"shouldCreate": false}`,
           agentId,
           name: result.name,
         });
-        return { created: true, name: result.name };
+        return httpOk(req, { created: true, name: result.name });
       }
     } catch {}
 
-    return { created: false };
+    return httpOk(req, { created: false });
   },
 );
 

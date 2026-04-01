@@ -1,9 +1,10 @@
 import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createRecordMetric } from "./shared/metrics.js";
-import { requireAuth, sanitizeId } from "./shared/utils.js";
+import { requireAuth, sanitizeId , httpOk } from "./shared/utils.js";
 import { safeCall } from "./shared/errors.js";
 import type { FeedbackPolicy, ReviewResult } from "./types.js";
+
 
 const sdk = registerWorker(ENGINE_URL, {
   workerName: "feedback",
@@ -692,7 +693,7 @@ registerFunction(
     recordMetric("feedback_signal_injected", 1, { signalType }, "counter");
     log.info("Signal injected", { agentId: sanitizedId, signalType, signalId });
 
-    return { signalId, injected: true };
+    return httpOk(req, { signalId, injected: true });
   },
 );
 
@@ -727,7 +728,7 @@ registerFunction(
       value: source,
     } });
 
-    return { sourceId, registered: true };
+    return httpOk(req, { sourceId, registered: true });
   },
 );
 
@@ -759,7 +760,7 @@ registerFunction(
       .sort((a: any, b: any) => b.createdAt - a.createdAt)
       .slice(0, limit);
 
-    return { agentId, count: signals.length, signals };
+    return httpOk(req, { agentId, count: signals.length, signals });
   },
 );
 

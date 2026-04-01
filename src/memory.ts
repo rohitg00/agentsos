@@ -1,8 +1,10 @@
+import { httpOk } from "./shared/utils.js";
 import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { createHash } from "crypto";
 import { safeCall } from "./shared/errors.js";
 import { recordMetric } from "./shared/metrics.js";
+
 
 const log = new Logger();
 
@@ -430,13 +432,8 @@ registerFunction(
     description: "Merge structured updates into agent user profile",
     metadata: { category: "memory" },
   },
-  async ({
-    agentId,
-    updates,
-  }: {
-    agentId: string;
-    updates: Record<string, unknown>;
-  }) => {
+  async (req: any) => {
+    const { agentId, updates } = req.body || req;
     const scope = `user:profile:${agentId}`;
     const existing: any = await safeCall(
       () =>
@@ -477,7 +474,7 @@ registerFunction(
     });
 
     recordMetric("memory_operations_total", 1, { operation: "profile_update" });
-    return { updated: true, profile };
+    return httpOk(req, { updated: true, profile });
   },
 );
 
@@ -487,7 +484,8 @@ registerFunction(
     description: "Retrieve agent user profile",
     metadata: { category: "memory" },
   },
-  async ({ agentId }: { agentId: string }) => {
+  async (req: any) => {
+    const { agentId } = req.body || req;
     const profile: any = await safeCall(
       () =>
         trigger({
@@ -497,7 +495,7 @@ registerFunction(
       null,
       { agentId, operation: "get_profile" },
     );
-    return profile || null;
+    return httpOk(req, profile || null);
   },
 );
 
@@ -507,15 +505,8 @@ registerFunction(
     description: "Keyword + recency search across memories grouped by session",
     metadata: { category: "memory" },
   },
-  async ({
-    agentId,
-    query,
-    limit: rawLimit = 10,
-  }: {
-    agentId: string;
-    query: string;
-    limit?: number;
-  }) => {
+  async (req: any) => {
+    const { agentId, query, limit: rawLimit = 10 } = req.body || req;
     const limit = Math.max(1, Math.min(Number(rawLimit) || 10, 100));
     const entries: any = await trigger({
       function_id: "state::list",
@@ -560,10 +551,10 @@ registerFunction(
 
     recordMetric("memory_operations_total", 1, { operation: "session_search" });
 
-    return [...sessionMap.entries()]
+    return httpOk(req, [...sessionMap.entries()]
       .map(([sessionId, data]) => ({ sessionId, ...data }))
       .sort((a, b) => b.topScore - a.topScore)
-      .slice(0, limit);
+      .slice(0, limit));
   },
 );
 

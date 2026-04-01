@@ -2,7 +2,8 @@ import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
-import { requireAuth, sanitizeId } from "./shared/utils.js";
+import { requireAuth, sanitizeId , httpOk } from "./shared/utils.js";
+
 
 const log = new Logger();
 const sdk = registerWorker(ENGINE_URL, { workerName: "recovery", otel: OTEL_CONFIG });
@@ -63,7 +64,7 @@ registerFunction(
     log.info("Recovery scan complete", { agentCount: validResults.length });
     recordMetric("recovery_scan", validResults.length, {}, "counter");
 
-    return { scannedAt: Date.now(), agents: validResults };
+    return httpOk(req, { scannedAt: Date.now(), agents: validResults });
   },
 );
 
@@ -140,7 +141,7 @@ registerFunction(
       memoryHealthy,
     };
 
-    return result;
+    return httpOk(req, result);
   },
 );
 
@@ -199,7 +200,7 @@ registerFunction(
     }
 
     const result: ClassificationResult = { agentId, classification, checks };
-    return result;
+    return httpOk(req, result);
   },
 );
 
@@ -236,7 +237,7 @@ registerFunction(
         attempts,
       });
       log.warn("Recovery attempts exhausted", { agentId, attempts });
-      return { agentId, action: "exhausted", attempts };
+      return httpOk(req, { agentId, action: "exhausted", attempts });
     }
 
     const classified: ClassificationResult = await trigger({
@@ -333,7 +334,7 @@ registerFunction(
     log.info("Recovery action taken", { agentId, action, attempt: action !== "none" ? attempts + 1 : attempts });
     recordMetric("recovery_action", 1, { action }, "counter");
 
-    return { agentId, action, attempt: action !== "none" ? attempts + 1 : attempts, classification: classified.classification };
+    return httpOk(req, { agentId, action, attempt: action !== "none" ? attempts + 1 : attempts, classification: classified.classification });
   },
 );
 
@@ -400,13 +401,13 @@ registerFunction(
     log.info("Recovery report complete", summary);
     recordMetric("recovery_report", 1, {}, "counter");
 
-    return {
+    return httpOk(req, {
       reportedAt: Date.now(),
       totalAgents: agents.length,
       summary,
       classifications,
       recoveryActions: recoveries,
-    };
+    });
   },
 );
 

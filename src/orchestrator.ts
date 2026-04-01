@@ -2,7 +2,8 @@ import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
-import { stripCodeFences, requireAuth, sanitizeId } from "./shared/utils.js";
+import { stripCodeFences, requireAuth, sanitizeId , httpOk } from "./shared/utils.js";
+
 
 const log = new Logger();
 const sdk = registerWorker(ENGINE_URL, { workerName: "orchestrator", otel: OTEL_CONFIG });
@@ -89,7 +90,7 @@ registerFunction(
     log.info("Plan created", { planId, complexity: plan.complexity, agentCount: plan.agents.length });
     recordMetric("orchestrator_plan_created", 1, { complexity: plan.complexity }, "counter");
 
-    return plan;
+    return httpOk(req, plan);
   },
 );
 
@@ -204,7 +205,7 @@ registerFunction(
     log.info("Plan execution started", { planId, rootId, spawned: spawnResult?.spawned?.length });
     recordMetric("orchestrator_execute", 1, { planId }, "counter");
 
-    return { planId, rootId, workspaceScope: `workspace:${planId}`, spawned: spawnResult?.spawned || [] };
+    return httpOk(req, { planId, rootId, workspaceScope: `workspace:${planId}`, spawned: spawnResult?.spawned || [] });
   },
 );
 
@@ -228,7 +229,7 @@ registerFunction(
         [],
         { operation: "list_plans" },
       );
-      return {
+      return httpOk(req, {
         count: plans.length,
         plans: plans.map((p) => ({
           id: (p.value || p).id,
@@ -236,7 +237,7 @@ registerFunction(
           complexity: (p.value || p).complexity,
           createdAt: (p.value || p).createdAt,
         })),
-      };
+      });
     }
 
     const plan: any = await trigger({
@@ -259,7 +260,7 @@ registerFunction(
     );
 
     if (!run) {
-      return { plan, progress: null };
+      return httpOk(req, { plan, progress: null });
     }
 
     const taskEntries: any[] = await safeCall(
@@ -278,7 +279,7 @@ registerFunction(
     const failed = tasks.filter((t: any) => t.status === "failed").length;
     const percentage = total > 0 ? Math.round((completed / total) * 100) : 0;
 
-    return {
+    return httpOk(req, {
       plan,
       progress: {
         rootId: run.rootId,
@@ -288,7 +289,7 @@ registerFunction(
         percentage,
         runStatus: run.status,
       },
-    };
+    });
   },
 );
 
@@ -390,7 +391,7 @@ registerFunction(
     log.info("Plan intervention", { planId, action });
     recordMetric("orchestrator_intervene", 1, { action }, "counter");
 
-    return { planId, action, newStatus: plan.status };
+    return httpOk(req, { planId, action, newStatus: plan.status });
   },
 );
 
@@ -431,7 +432,7 @@ registerFunction(
 
     log.info("Workspace write", { planId: safePlanId, key: safeKey, writtenBy });
 
-    return { written: true, key: safeKey, planId: safePlanId };
+    return httpOk(req, { written: true, key: safeKey, planId: safePlanId });
   },
 );
 
@@ -457,7 +458,7 @@ registerFunction(
         function_id: "state::get",
         payload: { scope: `workspace:${safePlanId}`, key: safeKey },
       });
-      return entry;
+      return httpOk(req, entry);
     }
 
     const entries: any[] = await safeCall(
@@ -470,11 +471,11 @@ registerFunction(
       { operation: "list_workspace" },
     );
 
-    return {
+    return httpOk(req, {
       planId: safePlanId,
       count: entries.length,
       entries: entries.map((e) => e.value || e),
-    };
+    });
   },
 );
 

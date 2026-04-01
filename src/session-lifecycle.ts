@@ -2,7 +2,8 @@ import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
-import { requireAuth } from "./shared/utils.js";
+import { requireAuth , httpOk } from "./shared/utils.js";
+
 
 const log = new Logger();
 
@@ -74,18 +75,18 @@ registerFunction(
     const currentState: LifecycleState = current?.state || "spawning";
 
     if (TERMINAL_STATES.has(currentState)) {
-      return {
+      return httpOk(req, {
         transitioned: false,
         reason: `Cannot transition from terminal state: ${currentState}`,
-      };
+      });
     }
 
     const allowed = VALID_TRANSITIONS[currentState] || [];
     if (!allowed.includes(newState)) {
-      return {
+      return httpOk(req, {
         transitioned: false,
         reason: `Invalid transition: ${currentState} → ${newState}`,
-      };
+      });
     }
 
     const entry = {
@@ -203,7 +204,7 @@ registerFunction(
     });
     log.info("Lifecycle transition", { agentId, from: currentState, to: newState });
 
-    return { transitioned: true, from: currentState, to: newState };
+    return httpOk(req, { transitioned: true, from: currentState, to: newState });
   },
 );
 
@@ -225,7 +226,7 @@ registerFunction(
       null,
       { agentId, operation: "get_state" },
     );
-    return state || { state: "spawning", transitionedAt: Date.now() };
+    return httpOk(req, state || { state: "spawning", transitionedAt: Date.now() });
   },
 );
 
@@ -254,7 +255,7 @@ registerFunction(
       payload: { scope: `lifecycle_reactions:${agentId}`, key: id, value: reaction },
     });
 
-    return { id, registered: true };
+    return httpOk(req, { id, registered: true });
   },
 );
 
@@ -277,7 +278,7 @@ registerFunction(
       [],
       { operation: "list_reactions" },
     );
-    return all.map((e: any) => e.value).filter(Boolean);
+    return httpOk(req, all.map((e: any) => e.value).filter(Boolean));
   },
 );
 

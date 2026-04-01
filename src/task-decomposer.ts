@@ -2,7 +2,8 @@ import { registerWorker, TriggerAction, Logger } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "./shared/config.js";
 import { recordMetric } from "./shared/metrics.js";
 import { safeCall } from "./shared/errors.js";
-import { stripCodeFences, requireAuth, sanitizeId } from "./shared/utils.js";
+import { stripCodeFences, requireAuth, sanitizeId , httpOk } from "./shared/utils.js";
+
 
 const log = new Logger();
 const sdk = registerWorker(ENGINE_URL, { workerName: "task-decomposer", otel: OTEL_CONFIG });
@@ -49,7 +50,7 @@ registerFunction(
 
     const currentDepth = depth || 0;
     if (currentDepth >= MAX_DEPTH) {
-      return { decomposed: false, reason: "Max depth reached" };
+      return httpOk(req, { decomposed: false, reason: "Max depth reached" });
     }
 
     const rootId = existingRootId ? sanitizeId(existingRootId) : generateTaskId();
@@ -75,7 +76,7 @@ registerFunction(
       subtasks = (parsed.subtasks || []).slice(0, MAX_SUBTASKS);
     } catch {
       log.warn("Failed to parse LLM decomposition", { rootId, taskId });
-      return { decomposed: false, reason: "LLM parse failure", rootId };
+      return httpOk(req, { decomposed: false, reason: "LLM parse failure", rootId });
     }
 
     if (!parentId) {
@@ -146,7 +147,7 @@ registerFunction(
     log.info("Task decomposed", { rootId, taskId, subtaskCount: created.length });
     recordMetric("task_decomposed", created.length, { rootId }, "counter");
 
-    return { rootId, taskId, subtasks: created };
+    return httpOk(req, { rootId, taskId, subtasks: created });
   },
 );
 
@@ -176,7 +177,7 @@ registerFunction(
       throw Object.assign(new Error("Task not found"), { statusCode: 404 });
     }
 
-    return task;
+    return httpOk(req, task);
   },
 );
 
@@ -270,7 +271,7 @@ registerFunction(
     log.info("Task status updated", { rootId, taskId, status });
     recordMetric("task_status_updated", 1, { rootId, status }, "counter");
 
-    return { taskId, status, updatedAt: task.updatedAt };
+    return httpOk(req, { taskId, status, updatedAt: task.updatedAt });
   },
 );
 
@@ -305,7 +306,7 @@ registerFunction(
       tasks = tasks.filter((t: any) => t.status === status);
     }
 
-    return { rootId, count: tasks.length, tasks };
+    return httpOk(req, { rootId, count: tasks.length, tasks });
   },
 );
 
@@ -353,7 +354,7 @@ registerFunction(
     log.info("Spawned task workers", { rootId, count: spawned });
     recordMetric("task_workers_spawned", spawned, { rootId }, "counter");
 
-    return { rootId, spawned };
+    return httpOk(req, { rootId, spawned });
   },
 );
 
