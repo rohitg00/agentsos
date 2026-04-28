@@ -3,7 +3,10 @@ import { shutdownManager } from "@agentos/shared/shutdown";
 shutdownManager.initShutdown();
 console.log("AgentOS booting (iii-sdk registerWorker API, OTel enabled)");
 
-import "./agent-core.js";
+// Canonical workers for memory, security, llm-router, and agent-core live in
+// workers/ as Rust crates. Their TypeScript duplicates have been removed.
+// Callers should invoke those functions via iii.trigger({ function_id: "memory::store", ... }).
+
 import "./api.js";
 import "./artifact-dag.js";
 import "./hashline.js";
@@ -27,17 +30,14 @@ import "./feedback.js";
 import "./hand-runner.js";
 import "./hooks.js";
 import "./knowledge-graph.js";
-import "./llm-router.js";
 import "./loop-guard.js";
 import "./mcp-client.js";
-import "./memory.js";
 import "./memory-reflection.js";
 import "./migration.js";
 import "./model-catalog.js";
 import "./orchestrator.js";
 import "./rate-limiter.js";
 import "./recovery.js";
-import "./security.js";
 import "./security-headers.js";
 import "./security-map.js";
 import "./security-zeroize.js";
