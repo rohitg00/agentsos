@@ -1,0 +1,7 @@
+iii: v1
+name: hand-runner
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-hand-runner
+description: "Reads hands/*/HAND.toml configs and drives scheduled agent loops"

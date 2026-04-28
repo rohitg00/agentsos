@@ -1,0 +1,6 @@
+[hand]
+id = "tiny"
+name = "Tiny Hand"
+description = "minimal fixture for tests"
+enabled = true
+schedule = "0 0 * * *"

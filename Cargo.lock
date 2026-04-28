@@ -99,6 +99,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentos-hand-runner"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agentos-hierarchy"
 version = "0.0.1"
 dependencies = [
