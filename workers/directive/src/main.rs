@@ -314,31 +314,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "directive::create".to_string(),
-        config: json!({ "method": "POST", "path": "/api/directives" }),
+        config: json!({ "http_method": "POST", "api_path": "api/directives" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "directive::get".to_string(),
-        config: json!({ "method": "GET", "path": "/api/directives/:realmId/:id" }),
+        config: json!({ "http_method": "GET", "api_path": "api/directives/:realmId/:id" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "directive::list".to_string(),
-        config: json!({ "method": "GET", "path": "/api/directives/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/directives/:realmId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "directive::update".to_string(),
-        config: json!({ "method": "PATCH", "path": "/api/directives/:realmId/:id" }),
+        config: json!({ "http_method": "PATCH", "api_path": "api/directives/:realmId/:id" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "directive::ancestry".to_string(),
-        config: json!({ "method": "GET", "path": "/api/directives/:realmId/:id/ancestry" }),
+        config: json!({ "http_method": "GET", "api_path": "api/directives/:realmId/:id/ancestry" }),
         metadata: None,
     })?;
 

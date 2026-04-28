@@ -425,25 +425,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "pulse::register".to_string(),
-        config: json!({ "method": "POST", "path": "/api/pulse/register" }),
+        config: json!({ "http_method": "POST", "api_path": "api/pulse/register" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "pulse::invoke".to_string(),
-        config: json!({ "method": "POST", "path": "/api/pulse/invoke" }),
+        config: json!({ "http_method": "POST", "api_path": "api/pulse/invoke" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "pulse::status".to_string(),
-        config: json!({ "method": "GET", "path": "/api/pulse/:realmId/:agentId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/pulse/:realmId/:agentId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "pulse::toggle".to_string(),
-        config: json!({ "method": "PATCH", "path": "/api/pulse/:realmId/:agentId" }),
+        config: json!({ "http_method": "PATCH", "api_path": "api/pulse/:realmId/:agentId" }),
         metadata: None,
     })?;
 

@@ -391,31 +391,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "bridge::register".to_string(),
-        config: json!({ "method": "POST", "path": "/api/bridge/runtimes" }),
+        config: json!({ "http_method": "POST", "api_path": "api/bridge/runtimes" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "bridge::invoke".to_string(),
-        config: json!({ "method": "POST", "path": "/api/bridge/invoke" }),
+        config: json!({ "http_method": "POST", "api_path": "api/bridge/invoke" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "bridge::cancel".to_string(),
-        config: json!({ "method": "POST", "path": "/api/bridge/cancel" }),
+        config: json!({ "http_method": "POST", "api_path": "api/bridge/cancel" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "bridge::list".to_string(),
-        config: json!({ "method": "GET", "path": "/api/bridge/runtimes" }),
+        config: json!({ "http_method": "GET", "api_path": "api/bridge/runtimes" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "bridge::run".to_string(),
-        config: json!({ "method": "GET", "path": "/api/bridge/runs/:runId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/bridge/runs/:runId" }),
         metadata: None,
     })?;
 

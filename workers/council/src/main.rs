@@ -507,37 +507,37 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::submit".to_string(),
-        config: json!({ "method": "POST", "path": "/api/council/proposals" }),
+        config: json!({ "http_method": "POST", "api_path": "api/council/proposals" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::decide".to_string(),
-        config: json!({ "method": "POST", "path": "/api/council/proposals/:id/decide" }),
+        config: json!({ "http_method": "POST", "api_path": "api/council/proposals/:id/decide" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::proposals".to_string(),
-        config: json!({ "method": "GET", "path": "/api/council/proposals/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/council/proposals/:realmId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::override".to_string(),
-        config: json!({ "method": "POST", "path": "/api/council/override" }),
+        config: json!({ "http_method": "POST", "api_path": "api/council/override" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::activity_log".to_string(),
-        config: json!({ "method": "GET", "path": "/api/council/activity/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/council/activity/:realmId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "council::verify".to_string(),
-        config: json!({ "method": "GET", "path": "/api/council/verify/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/council/verify/:realmId" }),
         metadata: None,
     })?;
 

@@ -413,25 +413,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "ledger::set_budget".to_string(),
-        config: json!({ "method": "POST", "path": "/api/ledger/budget" }),
+        config: json!({ "http_method": "POST", "api_path": "api/ledger/budget" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "ledger::check".to_string(),
-        config: json!({ "method": "GET", "path": "/api/ledger/check/:realmId/:agentId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/ledger/check/:realmId/:agentId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "ledger::spend".to_string(),
-        config: json!({ "method": "POST", "path": "/api/ledger/spend" }),
+        config: json!({ "http_method": "POST", "api_path": "api/ledger/spend" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "ledger::summary".to_string(),
-        config: json!({ "method": "GET", "path": "/api/ledger/summary/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/ledger/summary/:realmId" }),
         metadata: None,
     })?;
 

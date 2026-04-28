@@ -374,43 +374,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::create".to_string(),
-        config: json!({ "method": "POST", "path": "/api/realms" }),
+        config: json!({ "http_method": "POST", "api_path": "api/realms" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::list".to_string(),
-        config: json!({ "method": "GET", "path": "/api/realms" }),
+        config: json!({ "http_method": "GET", "api_path": "api/realms" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::get".to_string(),
-        config: json!({ "method": "GET", "path": "/api/realms/:id" }),
+        config: json!({ "http_method": "GET", "api_path": "api/realms/:id" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::update".to_string(),
-        config: json!({ "method": "PATCH", "path": "/api/realms/:id" }),
+        config: json!({ "http_method": "PATCH", "api_path": "api/realms/:id" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::delete".to_string(),
-        config: json!({ "method": "DELETE", "path": "/api/realms/:id" }),
+        config: json!({ "http_method": "DELETE", "api_path": "api/realms/:id" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::export".to_string(),
-        config: json!({ "method": "POST", "path": "/api/realms/:id/export" }),
+        config: json!({ "http_method": "POST", "api_path": "api/realms/:id/export" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "realm::import".to_string(),
-        config: json!({ "method": "POST", "path": "/api/realms/import" }),
+        config: json!({ "http_method": "POST", "api_path": "api/realms/import" }),
         metadata: None,
     })?;
 
