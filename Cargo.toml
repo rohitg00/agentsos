@@ -7,6 +7,7 @@ members = [
     "workers/bridge",
     "workers/council",
     "workers/directive",
+    "workers/hand-runner",
     "workers/hierarchy",
     "workers/ledger",
     "workers/llm-router",

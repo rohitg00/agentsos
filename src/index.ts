@@ -27,7 +27,6 @@ import "./dashboard.js";
 import "./eval.js";
 import "./evolve.js";
 import "./feedback.js";
-import "./hand-runner.js";
 import "./hooks.js";
 import "./knowledge-graph.js";
 import "./loop-guard.js";
