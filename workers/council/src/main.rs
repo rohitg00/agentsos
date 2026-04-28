@@ -273,19 +273,19 @@ async fn override_agent(iii: &III, req: OverrideRequest) -> Result<Value, IIIErr
         other => return Err(IIIError::Handler(format!("unknown override action: {other}"))),
     };
 
-    let _ = iii
-        .trigger(TriggerRequest {
-            function_id: "state::update".to_string(),
-            payload: json!({
+    iii.trigger(TriggerRequest {
+        function_id: "state::update".to_string(),
+        payload: json!({
             "scope": "agents",
             "key": &req.target_agent_id,
             "path": "status",
             "value": new_status,
         }),
-            action: None,
-            timeout_ms: None,
-        })
-        .await;
+        action: None,
+        timeout_ms: None,
+    })
+    .await
+    .map_err(|e| IIIError::Handler(format!("failed to update agent state: {e}")))?;
 
     let _ = log_activity(iii, LogActivityRequest {
         realm_id: req.realm_id.clone(),
@@ -403,7 +403,8 @@ async fn verify_activity_chain(iii: &III, realm_id: &str) -> Result<Value, IIIEr
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let ws_url = std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
+    let iii = register_worker(&ws_url, InitOptions::default());
 
     let iii_clone = iii.clone();
     iii.register_function(

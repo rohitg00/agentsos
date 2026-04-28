@@ -271,8 +271,12 @@ async fn record_spend(iii: &III, req: RecordSpendRequest) -> Result<Value, IIIEr
                 })
                 .await;
 
-            let utilization = (budget.spent_cents as f64 / budget.monthly_cents as f64) * 100.0;
-            if utilization >= budget.soft_threshold * 100.0 && utilization < 100.0 {
+            let utilization = if budget.monthly_cents > 0 {
+                (budget.spent_cents as f64 / budget.monthly_cents as f64) * 100.0
+            } else {
+                0.0
+            };
+            if budget.monthly_cents > 0 && utilization >= budget.soft_threshold * 100.0 && utilization < 100.0 {
                 let _ = {
                     let _iii = iii.clone();
                     let _payload = json!({
@@ -351,7 +355,8 @@ async fn get_summary(iii: &III, req: SummaryRequest) -> Result<Value, IIIError> 
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let ws_url = std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
+    let iii = register_worker(&ws_url, InitOptions::default());
 
     let iii_clone = iii.clone();
     iii.register_function(

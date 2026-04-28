@@ -29,7 +29,8 @@ struct MemoryEntry {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let ws_url = std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
+    let iii = register_worker(&ws_url, InitOptions::default());
 
     let iii_ref = iii.clone();
     iii.register_function(
@@ -544,6 +545,12 @@ async fn evict_memories(iii: &III, input: Value) -> Result<Value, IIIError> {
                 let _ = iii.trigger(TriggerRequest {
                     function_id: "state::delete".to_string(),
                     payload: json!({ "scope": scope, "key": &m.id }),
+                    action: None,
+                    timeout_ms: None,
+                }).await;
+                let _ = iii.trigger(TriggerRequest {
+                    function_id: "state::delete".to_string(),
+                    payload: json!({ "scope": scope, "key": &m.hash }),
                     action: None,
                     timeout_ms: None,
                 }).await;

@@ -349,7 +349,8 @@ async fn toggle_pulse(iii: &III, realm_id: &str, agent_id: &str, enabled: bool) 
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let ws_url = std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
+    let iii = register_worker(&ws_url, InitOptions::default());
 
     let iii_clone = iii.clone();
     iii.register_function(
