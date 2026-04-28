@@ -286,7 +286,8 @@ async fn providers_handler(state: Arc<RouterState>, _input: Value) -> Result<Val
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
-    let iii = register_worker("ws://localhost:49134", InitOptions::default());
+    let ws_url = std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
+    let iii = register_worker(&ws_url, InitOptions::default());
 
     let state = Arc::new(RouterState {
         usage: DashMap::new(),
