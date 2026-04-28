@@ -53,7 +53,7 @@ jobs:
 
           fail = False
           for d in sorted(Path("workers").iterdir()):
-              if not d.is_dir() or d.name == "embedding":
+              if not d.is_dir():
                   continue
               p = d / "iii.worker.yaml"
               if not p.exists():
