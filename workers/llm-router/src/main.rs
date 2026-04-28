@@ -226,7 +226,7 @@ async fn complete_handler(
     usage.requests += 1;
 
     let content = result["content"].as_array()
-        .and_then(|blocks| blocks.first())
+        .and_then(|blocks| blocks.iter().find(|b| b["type"].as_str() == Some("text")))
         .and_then(|b| b["text"].as_str())
         .or_else(|| result["choices"].as_array()
             .and_then(|c| c.first())
@@ -915,5 +915,46 @@ mod tests {
         let parts: Vec<&str> = key.splitn(2, ':').collect();
         assert_eq!(parts.len(), 1);
         assert_eq!(parts[0], "just-a-key");
+    }
+
+    fn extract_anthropic_text(result: &Value) -> &str {
+        result["content"].as_array()
+            .and_then(|blocks| blocks.iter().find(|b| b["type"].as_str() == Some("text")))
+            .and_then(|b| b["text"].as_str())
+            .or_else(|| result["choices"].as_array()
+                .and_then(|c| c.first())
+                .and_then(|c| c["message"]["content"].as_str()))
+            .unwrap_or("")
+    }
+
+    #[test]
+    fn test_content_extraction_tool_use_first_then_text() {
+        let result = json!({
+            "content": [
+                {"type": "tool_use", "id": "t1", "name": "search", "input": {"q": "rust"}},
+                {"type": "text", "text": "Here is what I found."},
+            ]
+        });
+        assert_eq!(extract_anthropic_text(&result), "Here is what I found.");
+    }
+
+    #[test]
+    fn test_content_extraction_text_only() {
+        let result = json!({"content": [{"type": "text", "text": "just text"}]});
+        assert_eq!(extract_anthropic_text(&result), "just text");
+    }
+
+    #[test]
+    fn test_content_extraction_only_tool_use_returns_empty() {
+        let result = json!({"content": [{"type": "tool_use", "id": "t1", "name": "x", "input": {}}]});
+        assert_eq!(extract_anthropic_text(&result), "");
+    }
+
+    #[test]
+    fn test_content_extraction_falls_through_to_openai_choices() {
+        let result = json!({
+            "choices": [{"message": {"content": "openai-style content"}}]
+        });
+        assert_eq!(extract_anthropic_text(&result), "openai-style content");
     }
 }
