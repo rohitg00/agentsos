@@ -415,43 +415,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::create".to_string(),
-        config: json!({ "method": "POST", "path": "/api/missions" }),
+        config: json!({ "http_method": "POST", "api_path": "api/missions" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::checkout".to_string(),
-        config: json!({ "method": "POST", "path": "/api/missions/:id/checkout" }),
+        config: json!({ "http_method": "POST", "api_path": "api/missions/:id/checkout" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::release".to_string(),
-        config: json!({ "method": "POST", "path": "/api/missions/:id/release" }),
+        config: json!({ "http_method": "POST", "api_path": "api/missions/:id/release" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::transition".to_string(),
-        config: json!({ "method": "PATCH", "path": "/api/missions/:id/status" }),
+        config: json!({ "http_method": "PATCH", "api_path": "api/missions/:id/status" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::list".to_string(),
-        config: json!({ "method": "GET", "path": "/api/missions/:realmId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/missions/:realmId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::comment".to_string(),
-        config: json!({ "method": "POST", "path": "/api/missions/:id/comments" }),
+        config: json!({ "http_method": "POST", "api_path": "api/missions/:id/comments" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "mission::comments".to_string(),
-        config: json!({ "method": "GET", "path": "/api/missions/:realmId/:missionId/comments" }),
+        config: json!({ "http_method": "GET", "api_path": "api/missions/:realmId/:missionId/comments" }),
         metadata: None,
     })?;
 

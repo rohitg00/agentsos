@@ -261,16 +261,20 @@ jobs:
             timeout 1 bash -c "echo > /dev/tcp/127.0.0.1/3111" 2>/dev/null && break
             sleep 1
           done
-          for w in agentos-core agentos-llm-router agentos-memory agentos-security; do
+          for w in agentos-core agentos-llm-router agentos-memory agentos-security \
+                   agentos-realm agentos-mission agentos-directive agentos-hierarchy \
+                   agentos-council agentos-ledger agentos-pulse agentos-bridge \
+                   agentos-wasm-sandbox; do
             ./target/release/$w > "$w.log" 2>&1 &
           done
-          sleep 5
+          sleep 8
 
       - name: vitest e2e
         if: steps.gate.outputs.skip != 'true'
         env:
           AGENTOS_E2E: "1"
           AGENTOS_BASE_URL: http://127.0.0.1:3111
+          III_WS_URL: ws://localhost:49134
           AGENTOS_API_KEY: ${{ secrets.AGENTOS_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         run: pnpm run test:e2e

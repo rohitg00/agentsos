@@ -302,31 +302,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "hierarchy::set".to_string(),
-        config: json!({ "method": "POST", "path": "/api/hierarchy" }),
+        config: json!({ "http_method": "POST", "api_path": "api/hierarchy" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "hierarchy::tree".to_string(),
-        config: json!({ "method": "GET", "path": "/api/hierarchy/:realmId/tree" }),
+        config: json!({ "http_method": "GET", "api_path": "api/hierarchy/:realmId/tree" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "hierarchy::find".to_string(),
-        config: json!({ "method": "GET", "path": "/api/hierarchy/:realmId/find" }),
+        config: json!({ "http_method": "GET", "api_path": "api/hierarchy/:realmId/find" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "hierarchy::chain".to_string(),
-        config: json!({ "method": "GET", "path": "/api/hierarchy/:realmId/chain/:agentId" }),
+        config: json!({ "http_method": "GET", "api_path": "api/hierarchy/:realmId/chain/:agentId" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".to_string(),
         function_id: "hierarchy::remove".to_string(),
-        config: json!({ "method": "DELETE", "path": "/api/hierarchy/:realmId/:agentId" }),
+        config: json!({ "http_method": "DELETE", "api_path": "api/hierarchy/:realmId/:agentId" }),
         metadata: None,
     })?;
 
