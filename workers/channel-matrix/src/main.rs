@@ -112,7 +112,11 @@ async fn send_message(
             .put(&url)
             .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json")
-            .json(&json!({ "msgtype": "m.text", "body": chunk }))
+            // Use m.notice for bot-generated replies. Matrix clients and
+            // well-behaved bots ignore m.notice events when deciding what to
+            // process, which prevents the worker from ingesting its own
+            // messages if the homeserver echoes them back to the webhook.
+            .json(&json!({ "msgtype": "m.notice", "body": chunk }))
             .send()
             .await
             .map_err(|e| IIIError::Handler(e.to_string()))?;
@@ -134,6 +138,17 @@ async fn webhook_handler(
     let event = input.get("body").cloned().unwrap_or(input);
 
     if event.get("type").and_then(|t| t.as_str()) != Some("m.room.message") {
+        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
+    }
+
+    // Skip events authored as m.notice — those are bot-generated replies
+    // (including ours) and processing them would create a feedback loop.
+    let msgtype = event
+        .get("content")
+        .and_then(|c| c.get("msgtype"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if msgtype == "m.notice" {
         return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
     }
 
