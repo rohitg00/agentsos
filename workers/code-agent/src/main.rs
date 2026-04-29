@@ -2,11 +2,26 @@ use iii_sdk::error::IIIError;
 use iii_sdk::{InitOptions, RegisterFunction, register_worker};
 use regex::Regex;
 use serde_json::{Value, json};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 
 const DEFAULT_TIMEOUT_MS: u64 = 5_000;
 const MAX_TIMEOUT_MS: u64 = 30_000;
 const MAX_OUTPUT_LENGTH: usize = 100_000;
+
+/// Truncate `s` to at most `max_bytes` bytes, snapping back to the nearest
+/// preceding UTF-8 char boundary so we never panic on non-ASCII output.
+fn truncate_to_char_boundary(s: &mut String, max_bytes: usize) {
+    if s.len() <= max_bytes {
+        return;
+    }
+    let mut cut = max_bytes;
+    while cut > 0 && !s.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    s.truncate(cut);
+}
 
 fn detect_code_blocks(response: &str) -> Vec<String> {
     let re = Regex::new(r"(?s)```(?:typescript|javascript|ts|js)\n(.*?)```").unwrap();
@@ -27,7 +42,7 @@ fn truncate_result(value: Value) -> Value {
     }
 }
 
-fn run_sandboxed_js(code: &str) -> (Value, String) {
+fn run_sandboxed_js(code: &str, deadline: Instant, cancelled: Arc<AtomicBool>) -> (Value, String) {
     use rquickjs::{Context, Runtime};
 
     let runtime = match Runtime::new() {
@@ -35,6 +50,16 @@ fn run_sandboxed_js(code: &str) -> (Value, String) {
         Err(e) => return (json!({ "error": format!("runtime init failed: {e}") }), String::new()),
     };
     runtime.set_memory_limit(64 * 1024 * 1024);
+
+    // Cooperative cancellation: QuickJS calls this every ~10k bytecode ops.
+    // Returning true raises an uncatchable exception, so a `while(true){}`
+    // payload terminates within milliseconds of the deadline.
+    {
+        let cancelled = cancelled.clone();
+        runtime.set_interrupt_handler(Some(Box::new(move || {
+            cancelled.load(Ordering::Relaxed) || Instant::now() >= deadline
+        })));
+    }
 
     let ctx = match Context::full(&runtime) {
         Ok(c) => c,
@@ -74,7 +99,7 @@ fn run_sandboxed_js(code: &str) -> (Value, String) {
                             .unwrap_or("")
                             .to_string();
                         let mut stdout_trim = stdout;
-                        stdout_trim.truncate(MAX_OUTPUT_LENGTH);
+                        truncate_to_char_boundary(&mut stdout_trim, MAX_OUTPUT_LENGTH);
                         (truncate_result(result), stdout_trim)
                     }
                     Err(e) => (json!({ "error": format!("decode result: {e}") }), String::new()),
@@ -121,7 +146,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let timeout_ms = raw_timeout.clamp(1_000, MAX_TIMEOUT_MS);
 
             let start = Instant::now();
-            let join = tokio::task::spawn_blocking(move || run_sandboxed_js(&code));
+            let deadline = start + Duration::from_millis(timeout_ms);
+            let cancelled = Arc::new(AtomicBool::new(false));
+            let cancelled_for_task = cancelled.clone();
+            let join =
+                tokio::task::spawn_blocking(move || run_sandboxed_js(&code, deadline, cancelled_for_task));
+            // Outer timeout has a small grace period; the interrupt handler is
+            // the real enforcement mechanism.
             let outcome = tokio::time::timeout(Duration::from_millis(timeout_ms + 1_000), join).await;
 
             match outcome {
@@ -135,11 +166,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "stdout": "",
                     "executionTimeMs": start.elapsed().as_millis() as u64,
                 })),
-                Err(_) => Ok(json!({
-                    "result": { "error": "execution timeout" },
-                    "stdout": "",
-                    "executionTimeMs": timeout_ms,
-                })),
+                Err(_) => {
+                    // Flip the flag so the QuickJS interrupt handler aborts
+                    // execution at the next opportunity.
+                    cancelled.store(true, Ordering::Relaxed);
+                    Ok(json!({
+                        "result": { "error": "execution timeout" },
+                        "stdout": "",
+                        "executionTimeMs": timeout_ms,
+                    }))
+                }
             }
         })
         .description("Execute agent-written JavaScript in a sandboxed QuickJS context"),

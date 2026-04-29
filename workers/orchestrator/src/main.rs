@@ -49,11 +49,27 @@ fn strip_code_fences(s: &str) -> String {
     trimmed.trim().to_string()
 }
 
-fn sanitize_id(s: &str) -> String {
-    s.chars()
-        .filter(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | ':' | '.'))
-        .take(256)
-        .collect()
+/// Validate an id against the same rules as `task-decomposer/types.rs:53-75`:
+/// alphanumeric plus `_-:.`, max 256 chars, non-empty. Filtering or
+/// truncating silently aliases distinct inputs onto the same workspace
+/// scope/key, which lets one request read or overwrite another plan's data,
+/// so we reject instead.
+fn validate_id(s: &str) -> Result<String, IIIError> {
+    if s.is_empty() {
+        return Err(IIIError::Handler("id must not be empty".into()));
+    }
+    if s.len() > 256 {
+        return Err(IIIError::Handler("id exceeds 256 characters".into()));
+    }
+    if !s
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | ':' | '.'))
+    {
+        return Err(IIIError::Handler(format!(
+            "id contains invalid characters: {s}"
+        )));
+    }
+    Ok(s.to_string())
 }
 
 async fn state_get(iii: &III, scope: &str, key: &str) -> Result<Value, IIIError> {
@@ -247,7 +263,10 @@ async fn execute_handler(iii: &III, input: Value) -> Result<Value, IIIError> {
     )
     .await;
 
-    let spawn_result = iii
+    // task::spawn_workers must succeed or the run is wedged in `executing`
+    // with no workers. On failure, roll the plan + run state back to the
+    // pre-execute snapshot so the caller can retry idempotently.
+    let spawn_result = match iii
         .trigger(TriggerRequest {
             function_id: "task::spawn_workers".into(),
             payload: json!({ "rootId": root_id }),
@@ -255,7 +274,31 @@ async fn execute_handler(iii: &III, input: Value) -> Result<Value, IIIError> {
             timeout_ms: None,
         })
         .await
-        .unwrap_or(Value::Null);
+    {
+        Ok(v) => v,
+        Err(e) => {
+            plan.status = "planned".into();
+            let _ = state_set(
+                iii,
+                "orchestrator_plans",
+                &plan_id,
+                serde_json::to_value(&plan).unwrap(),
+            )
+            .await;
+            let mut failed_run = run.clone();
+            failed_run.status = "failed".into();
+            let _ = state_set(
+                iii,
+                "orchestrator_runs",
+                &plan_id,
+                serde_json::to_value(&failed_run).unwrap(),
+            )
+            .await;
+            return Err(IIIError::Handler(format!(
+                "task::spawn_workers failed: {e}"
+            )));
+        }
+    };
 
     let spawned = spawn_result
         .get("spawned")
@@ -387,18 +430,45 @@ async fn intervene_handler(iii: &III, input: Value) -> Result<Value, IIIError> {
             if let Some(r) = run.as_mut() {
                 r.status = "running".into();
                 let root_id = r.root_id.clone();
-                let _ = state_set(iii, "orchestrator_runs", &plan_id, serde_json::to_value(r).unwrap()).await;
-                let iii_clone = iii.clone();
-                tokio::spawn(async move {
-                    let _ = iii_clone
-                        .trigger(TriggerRequest {
-                            function_id: "task::spawn_workers".into(),
-                            payload: json!({ "rootId": root_id }),
-                            action: None,
-                            timeout_ms: None,
-                        })
-                        .await;
-                });
+                state_set(
+                    iii,
+                    "orchestrator_runs",
+                    &plan_id,
+                    serde_json::to_value(&*r).unwrap(),
+                )
+                .await?;
+                // Await the spawn so resume only reports success when workers
+                // actually started. If it fails, revert plan + run before
+                // returning the error to the caller.
+                if let Err(e) = iii
+                    .trigger(TriggerRequest {
+                        function_id: "task::spawn_workers".into(),
+                        payload: json!({ "rootId": root_id }),
+                        action: None,
+                        timeout_ms: None,
+                    })
+                    .await
+                {
+                    plan.status = "paused".into();
+                    r.status = "paused".into();
+                    let _ = state_set(
+                        iii,
+                        "orchestrator_runs",
+                        &plan_id,
+                        serde_json::to_value(&*r).unwrap(),
+                    )
+                    .await;
+                    let _ = state_set(
+                        iii,
+                        "orchestrator_plans",
+                        &plan_id,
+                        serde_json::to_value(&plan).unwrap(),
+                    )
+                    .await;
+                    return Err(IIIError::Handler(format!(
+                        "resume task::spawn_workers failed: {e}"
+                    )));
+                }
             }
         }
         "cancel" => {
@@ -449,10 +519,12 @@ async fn workspace_write_handler(iii: &III, input: Value) -> Result<Value, IIIEr
     let value = body.get("value").cloned().unwrap_or(Value::Null);
     let agent_id = body["agentId"].as_str().map(String::from);
 
-    let safe_plan_id = sanitize_id(&plan_id);
-    let safe_key = sanitize_id(&key);
-    let safe_agent_id = agent_id.as_deref().map(sanitize_id);
-    let written_by = safe_agent_id.unwrap_or_else(|| "system".to_string());
+    let safe_plan_id = validate_id(&plan_id)?;
+    let safe_key = validate_id(&key)?;
+    let written_by = match agent_id.as_deref() {
+        Some(a) => validate_id(a)?,
+        None => "system".to_string(),
+    };
 
     let entry = json!({
         "key": &safe_key,
@@ -475,11 +547,11 @@ async fn workspace_read_handler(iii: &III, input: Value) -> Result<Value, IIIErr
         .to_string();
     let key = body["key"].as_str().map(String::from);
 
-    let safe_plan_id = sanitize_id(&plan_id);
+    let safe_plan_id = validate_id(&plan_id)?;
     let scope = format!("workspace:{safe_plan_id}");
 
     if let Some(k) = key {
-        let safe_key = sanitize_id(&k);
+        let safe_key = validate_id(&k)?;
         let entry = state_get(iii, &scope, &safe_key).await?;
         return Ok(entry);
     }
@@ -594,8 +666,12 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_id_strips_unsafe_chars() {
-        assert_eq!(sanitize_id("plan/../etc"), "plan..etc");
-        assert_eq!(sanitize_id("workspace:abc-123"), "workspace:abc-123");
+    fn validate_id_rejects_unsafe_chars() {
+        assert!(validate_id("plan/../etc").is_err());
+        assert!(validate_id("plan with space").is_err());
+        assert!(validate_id("").is_err());
+        assert!(validate_id(&"x".repeat(257)).is_err());
+        assert_eq!(validate_id("workspace:abc-123").unwrap(), "workspace:abc-123");
+        assert_eq!(validate_id("plan_1.0").unwrap(), "plan_1.0");
     }
 }

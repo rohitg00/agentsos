@@ -125,6 +125,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentos-browser"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agentos-channel-email"
 version = "0.0.1"
 dependencies = [
@@ -285,6 +298,67 @@ dependencies = [
  "tracing-subscriber",
  "urlencoding",
  "which",
+]
+
+[[package]]
+name = "agentos-code-agent"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "iii-sdk",
+ "regex",
+ "rquickjs",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "agentos-context-cache"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "dashmap",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "agentos-context-manager"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
+name = "agentos-context-monitor"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -657,69 +731,33 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentos-security-headers"
+name = "agentos-session-lifecycle"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "chrono",
  "iii-sdk",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "url",
+ "uuid",
 ]
 
 [[package]]
-name = "agentos-security-map"
+name = "agentos-session-replay"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "ed25519-dalek",
- "hex",
- "hmac",
+ "chrono",
  "iii-sdk",
- "rand 0.8.6",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "agentos-security-zeroize"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "dashmap",
- "iii-sdk",
- "regex",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "zeroize",
-]
-
-[[package]]
-name = "agentos-skill-security"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "base64",
- "ed25519-dalek",
- "iii-sdk",
- "regex",
- "serde",
- "serde_json",
- "spki",
- "tokio",
- "tracing",
- "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]
@@ -733,6 +771,21 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "agentos-streaming"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "iii-sdk",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

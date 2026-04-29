@@ -76,45 +76,99 @@ fn assert_no_ssrf(url_str: &str) -> Result<(), IIIError> {
     if scheme != "http" && scheme != "https" {
         return Err(IIIError::Handler(format!("blocked scheme: {scheme}")));
     }
-    let host = parsed.host_str().unwrap_or("");
-    let blocked = ["localhost", "127.0.0.1", "0.0.0.0", "169.254.169.254", "metadata.google.internal"];
-    if blocked.contains(&host) {
-        return Err(IIIError::Handler(format!("blocked host: {host}")));
-    }
-    if host.starts_with("10.")
-        || host.starts_with("192.168.")
-        || host.starts_with("fc00:")
-        || host.starts_with("fd")
-    {
-        return Err(IIIError::Handler(format!("blocked private host: {host}")));
-    }
-    if let Some(rest) = host.strip_prefix("172.")
-        && let Some(second_octet) = rest.split('.').next()
-        && let Ok(n) = second_octet.parse::<u32>()
-        && (16..=31).contains(&n)
-    {
-        return Err(IIIError::Handler(format!("blocked private host: {host}")));
+    match parsed.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            if ip.is_loopback() || ip.is_private() || ip.is_link_local() || ip.is_unspecified() {
+                return Err(IIIError::Handler(format!("blocked host: {ip}")));
+            }
+            // Block link-local AWS/GCP metadata 169.254.x.x (covered by is_link_local)
+            // and broadcast / multicast as defense-in-depth.
+            if ip.is_broadcast() || ip.is_multicast() {
+                return Err(IIIError::Handler(format!("blocked host: {ip}")));
+            }
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            if ip.is_loopback() || ip.is_unspecified() || ip.is_multicast() {
+                return Err(IIIError::Handler(format!("blocked host: {ip}")));
+            }
+            // is_unique_local / is_unicast_link_local are unstable on stable Rust;
+            // match on the segments directly.
+            let segs = ip.segments();
+            // fc00::/7 unique local
+            if (segs[0] & 0xfe00) == 0xfc00 {
+                return Err(IIIError::Handler(format!("blocked host: {ip}")));
+            }
+            // fe80::/10 link-local
+            if (segs[0] & 0xffc0) == 0xfe80 {
+                return Err(IIIError::Handler(format!("blocked host: {ip}")));
+            }
+            // ::ffff:0:0/96 IPv4-mapped — re-check the embedded v4 address
+            if segs[0] == 0
+                && segs[1] == 0
+                && segs[2] == 0
+                && segs[3] == 0
+                && segs[4] == 0
+                && segs[5] == 0xffff
+            {
+                let v4 = std::net::Ipv4Addr::new(
+                    (segs[6] >> 8) as u8,
+                    (segs[6] & 0xff) as u8,
+                    (segs[7] >> 8) as u8,
+                    (segs[7] & 0xff) as u8,
+                );
+                if v4.is_loopback() || v4.is_private() || v4.is_link_local() || v4.is_unspecified() {
+                    return Err(IIIError::Handler(format!("blocked host: {v4}")));
+                }
+            }
+        }
+        Some(url::Host::Domain(host)) => {
+            let lower = host.to_ascii_lowercase();
+            if matches!(
+                lower.as_str(),
+                "localhost" | "metadata.google.internal" | "metadata"
+            ) {
+                return Err(IIIError::Handler(format!("blocked host: {host}")));
+            }
+            // Reject common loopback aliases that bypass IP parsing.
+            if lower.ends_with(".localhost") || lower == "ip6-localhost" {
+                return Err(IIIError::Handler(format!("blocked host: {host}")));
+            }
+        }
+        None => return Err(IIIError::Handler("missing host".into())),
     }
     Ok(())
 }
 
 async fn get_session_index(iii: &III) -> Vec<String> {
-    iii.trigger(TriggerRequest {
-        function_id: "state::get".into(),
-        payload: json!({ "scope": "browser_sessions", "key": "_index" }),
-        action: None,
-        timeout_ms: None,
-    })
-    .await
-    .ok()
-    .and_then(|v| serde_json::from_value::<Vec<String>>(v).ok())
-    .unwrap_or_default()
+    let raw = iii
+        .trigger(TriggerRequest {
+            function_id: "state::get".into(),
+            payload: json!({ "scope": "browser_sessions", "key": "_index" }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await
+        .ok();
+    let Some(v) = raw else { return Vec::new() };
+    // Accept both the legacy flat-array shape and the new { ids: [...] } shape
+    // produced by the atomic state::update path.
+    if let Some(arr) = v.as_array() {
+        return arr.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+    }
+    if let Some(arr) = v.get("ids").and_then(|x| x.as_array()) {
+        return arr.iter().filter_map(|x| x.as_str().map(String::from)).collect();
+    }
+    Vec::new()
 }
 
 async fn set_session_index(iii: &III, index: Vec<String>) -> Result<(), IIIError> {
     iii.trigger(TriggerRequest {
         function_id: "state::set".into(),
-        payload: json!({ "scope": "browser_sessions", "key": "_index", "value": index }),
+        payload: json!({
+            "scope": "browser_sessions",
+            "key": "_index",
+            "value": { "ids": index }
+        }),
         action: None,
         timeout_ms: None,
     })
@@ -180,19 +234,30 @@ async fn run_browser_script(
 
     let timeout = Duration::from_millis(DEFAULT_TIMEOUT_MS + 5_000);
 
-    let exec = Command::new("python3").arg(&session.script_path).arg(&payload_str).output();
-
-    let output = tokio::time::timeout(timeout, exec)
-        .await
-        .map_err(|_| IIIError::Handler("browser script timed out".into()))?
+    let child = Command::new("python3")
+        .arg(&session.script_path)
+        .arg(&payload_str)
+        .kill_on_drop(true)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
         .map_err(|e| IIIError::Handler(format!("spawn failed: {e}")))?;
+
+    let output = match tokio::time::timeout(timeout, child.wait_with_output()).await {
+        Ok(result) => result.map_err(|e| IIIError::Handler(format!("wait failed: {e}")))?,
+        Err(_) => {
+            // child is dropped on the early return; kill_on_drop guarantees termination.
+            return Err(IIIError::Handler("browser script timed out".into()));
+        }
+    };
 
     let stdout = String::from_utf8_lossy(&output.stdout).to_string();
     let stderr = String::from_utf8_lossy(&output.stderr).to_string();
 
     if !stderr.is_empty() && stdout.is_empty() {
         let mut snippet = stderr;
-        snippet.truncate(1_000);
+        truncate_to_char_boundary(&mut snippet, 1_000);
         return Err(IIIError::Handler(format!("Browser error: {snippet}")));
     }
 
@@ -200,10 +265,23 @@ async fn run_browser_script(
         Ok(v) => Ok(v),
         Err(_) => {
             let mut out = stdout;
-            out.truncate(100_000);
+            truncate_to_char_boundary(&mut out, 100_000);
             Ok(json!({ "output": out }))
         }
     }
+}
+
+/// Truncate `s` to at most `max_bytes` bytes, snapping back to the nearest
+/// preceding UTF-8 char boundary so multi-byte characters never panic.
+fn truncate_to_char_boundary(s: &mut String, max_bytes: usize) {
+    if s.len() <= max_bytes {
+        return;
+    }
+    let mut cut = max_bytes;
+    while cut > 0 && !s.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    s.truncate(cut);
 }
 
 async fn audit(iii: &III, kind: &str, detail: Value) {
@@ -295,17 +373,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         "Session already exists for agent: {agent_id}"
                     )));
                 }
-                let mut index = get_session_index(&iii).await;
-                if index.len() >= MAX_SESSIONS {
-                    return Err(IIIError::Handler(format!("Max sessions ({MAX_SESSIONS}) reached")));
-                }
 
                 let session_id = uuid::Uuid::new_v4().to_string();
                 let script_path =
                     std::env::temp_dir().join(format!("browser-bridge-{session_id}.py"));
-                tokio::fs::write(&script_path, BRIDGE_SCRIPT)
-                    .await
-                    .map_err(|e| IIIError::Handler(format!("write script failed: {e}")))?;
 
                 let now = now_ms();
                 let session = BrowserSession {
@@ -319,9 +390,56 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     script_path: script_path.to_string_lossy().to_string(),
                 };
 
+                // Atomically reserve a slot in the session index BEFORE doing any I/O.
+                // state::update is the engine's CAS-style primitive: we append the
+                // agent id and check the resulting size in a single round-trip so
+                // two concurrent create_session calls cannot both pass the cap.
+                let updated_index = iii
+                    .trigger(TriggerRequest {
+                        function_id: "state::update".into(),
+                        payload: json!({
+                            "scope": "browser_sessions",
+                            "key": "_index",
+                            "operations": [
+                                { "type": "merge", "path": "ids", "value": [agent_id.clone()] }
+                            ],
+                            "upsert": { "ids": [agent_id.clone()] }
+                        }),
+                        action: None,
+                        timeout_ms: None,
+                    })
+                    .await
+                    .map_err(|e| IIIError::Handler(format!("reserve session slot: {e}")))?;
+                let ids: Vec<String> = updated_index
+                    .get("ids")
+                    .and_then(|v| serde_json::from_value(v.clone()).ok())
+                    .unwrap_or_default();
+                if ids.len() > MAX_SESSIONS {
+                    // Roll the reservation back.
+                    let rolled: Vec<String> =
+                        ids.into_iter().filter(|id| id != &agent_id).collect();
+                    let _ = iii
+                        .trigger(TriggerRequest {
+                            function_id: "state::set".into(),
+                            payload: json!({
+                                "scope": "browser_sessions",
+                                "key": "_index",
+                                "value": { "ids": rolled }
+                            }),
+                            action: None,
+                            timeout_ms: None,
+                        })
+                        .await;
+                    return Err(IIIError::Handler(format!(
+                        "Max sessions ({MAX_SESSIONS}) reached"
+                    )));
+                }
+
+                tokio::fs::write(&script_path, BRIDGE_SCRIPT)
+                    .await
+                    .map_err(|e| IIIError::Handler(format!("write script failed: {e}")))?;
+
                 save_session(&iii, &session).await?;
-                index.push(agent_id.clone());
-                set_session_index(&iii, index).await?;
 
                 audit(
                     &iii,
@@ -389,6 +507,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let result = run_browser_script(&session, "navigate", json!({ "url": url_str })).await?;
                 let new_url = result["url"].as_str().unwrap_or(url_str).to_string();
+                // Re-validate the post-navigation URL to block redirects to internal hosts.
+                if new_url != url_str {
+                    assert_no_ssrf(&new_url)?;
+                }
                 session.current_url = new_url.clone();
                 save_session(&iii, &session).await?;
 
@@ -419,6 +541,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or_else(|| IIIError::Handler(format!("No browser session for agent: {agent_id}")))?;
                 touch_session(&iii, &mut session).await?;
 
+                // Re-validate the stored URL before reusing it as a navigation target.
+                assert_no_ssrf(&session.current_url)?;
                 let result = run_browser_script(
                     &session,
                     "click",
@@ -426,7 +550,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .await?;
                 if let Some(u) = result["url"].as_str() {
-                    session.current_url = u.to_string();
+                    let new_url = u.to_string();
+                    if new_url != session.current_url {
+                        assert_no_ssrf(&new_url)?;
+                    }
+                    session.current_url = new_url;
                     save_session(&iii, &session).await?;
                 }
 
@@ -455,6 +583,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or_else(|| IIIError::Handler(format!("No browser session for agent: {agent_id}")))?;
                 touch_session(&iii, &mut session).await?;
 
+                // Re-validate the stored URL before reusing it as a navigation target.
+                assert_no_ssrf(&session.current_url)?;
                 run_browser_script(
                     &session,
                     "type",
@@ -491,6 +621,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 ));
                 let save_path_str = save_path.to_string_lossy().to_string();
 
+                // Re-validate the stored URL before reusing it as a navigation target.
+                assert_no_ssrf(&session.current_url)?;
                 run_browser_script(
                     &session,
                     "screenshot",
@@ -522,6 +654,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .ok_or_else(|| IIIError::Handler(format!("No browser session for agent: {agent_id}")))?;
                 touch_session(&iii, &mut session).await?;
 
+                // Re-validate the stored URL before reusing it as a navigation target.
+                assert_no_ssrf(&session.current_url)?;
                 let result = run_browser_script(
                     &session,
                     "read",
@@ -530,7 +664,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .await?;
 
                 let mut text = result["text"].as_str().unwrap_or("").to_string();
-                text.truncate(100_000);
+                truncate_to_char_boundary(&mut text, 100_000);
                 Ok::<Value, IIIError>(json!({
                     "text": text,
                     "url": result["url"].as_str().unwrap_or(&session.current_url),
@@ -588,6 +722,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ("browser::create_session", "POST", "api/browser/session"),
         ("browser::list_sessions", "GET", "api/browser/sessions"),
         ("tool::browser_navigate", "POST", "api/browser/navigate"),
+        ("tool::browser_click", "POST", "api/browser/click"),
+        ("tool::browser_type", "POST", "api/browser/type"),
         ("tool::browser_screenshot", "POST", "api/browser/screenshot"),
         ("tool::browser_read_page", "POST", "api/browser/read"),
         ("tool::browser_close", "POST", "api/browser/close"),

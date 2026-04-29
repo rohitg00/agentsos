@@ -34,6 +34,10 @@ async fn record(iii: &III, input: Value) -> Result<Value, IIIError> {
     let iteration = input["iteration"].as_i64().unwrap_or(0);
 
     let counter_key = format!("{session_id}:counter");
+    // state::update is the only mechanism that gives us atomic ordering for
+    // replay sequence numbers. Falling back to now_ms() here breaks that
+    // guarantee under load and lets two concurrent records collide on the
+    // same key.
     let counter_resp = iii
         .trigger(TriggerRequest {
             function_id: "state::update".into(),
@@ -49,12 +53,11 @@ async fn record(iii: &III, input: Value) -> Result<Value, IIIError> {
             timeout_ms: None,
         })
         .await
-        .ok();
+        .map_err(|e| IIIError::Handler(format!("failed to increment replay counter: {e}")))?;
 
-    let sequence = counter_resp
-        .as_ref()
-        .and_then(|v| v["value"].as_i64())
-        .unwrap_or_else(now_ms);
+    let sequence = counter_resp["value"].as_i64().ok_or_else(|| {
+        IIIError::Handler("invalid counter response from state::update".into())
+    })?;
 
     let entry = ReplayEntry {
         session_id: session_id.clone(),
@@ -310,6 +313,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .description("Get session replay summary with stats"),
     );
 
+    iii.register_trigger(RegisterTriggerInput {
+        trigger_type: "http".into(),
+        function_id: "replay::record".into(),
+        config: json!({ "http_method": "POST", "api_path": "api/replay" }),
+        metadata: None,
+    })?;
     iii.register_trigger(RegisterTriggerInput {
         trigger_type: "http".into(),
         function_id: "replay::get".into(),

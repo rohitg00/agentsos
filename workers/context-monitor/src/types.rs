@@ -89,10 +89,12 @@ pub fn score_relevance_decay(messages: &[Message], now_ms: i64) -> f64 {
     for (i, m) in messages.iter().enumerate() {
         let recency = (i + 1) as f64 / len as f64;
         let age = match m.timestamp {
-            Some(ts) => (now_ms - ts) as f64 / (1000.0 * 60.0 * 60.0),
+            // Clamp to 0 so a future timestamp can't push age_decay past 1.0
+            // and lift the section score above 25.
+            Some(ts) => ((now_ms - ts) as f64 / (1000.0 * 60.0 * 60.0)).max(0.0),
             None => (len - i) as f64,
         };
-        let age_decay = (1.0 - age / 24.0).max(0.0);
+        let age_decay = (1.0 - age / 24.0).clamp(0.0, 1.0);
         weighted_score += age_decay * recency;
         total_weight += recency;
     }

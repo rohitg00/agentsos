@@ -17,8 +17,13 @@ pub struct CacheStats {
 }
 
 pub fn sanitize_id(id: &str) -> String {
+    // Match the upstream TS `sanitizeId()` contract: alphanumeric plus
+    // `-_:.`, capped at 256 characters.
     id.chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == ':')
+        .filter(|c| {
+            c.is_ascii_alphanumeric() || *c == '-' || *c == '_' || *c == ':' || *c == '.'
+        })
+        .take(256)
         .collect()
 }
 

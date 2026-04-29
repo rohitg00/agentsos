@@ -73,60 +73,73 @@ async fn health(input: Value) -> Result<Value, IIIError> {
 }
 
 fn sanitize_tool_pairs(messages: Vec<Message>) -> Vec<Message> {
-    let mut call_ids: HashSet<String> = HashSet::new();
+    let mut call_ids_per_msg: Vec<Vec<String>> = Vec::with_capacity(messages.len());
+    let mut all_call_ids: HashSet<String> = HashSet::new();
     let mut result_ids: HashSet<String> = HashSet::new();
 
     for m in &messages {
+        let mut ids_for_msg: Vec<String> = Vec::new();
         if m.role == "assistant"
-            && let Some(arr) = m.tool_calls.as_ref().and_then(|tc| tc.as_array()) {
-                for tc in arr {
-                    if let Some(cid) = tc["callId"].as_str().or_else(|| tc["id"].as_str()) {
-                        call_ids.insert(cid.to_string());
-                    }
+            && let Some(arr) = m.tool_calls.as_ref().and_then(|tc| tc.as_array())
+        {
+            for tc in arr {
+                if let Some(cid) = tc["callId"].as_str().or_else(|| tc["id"].as_str()) {
+                    ids_for_msg.push(cid.to_string());
+                    all_call_ids.insert(cid.to_string());
                 }
             }
+        }
+        call_ids_per_msg.push(ids_for_msg);
         if m.role == "tool"
-            && let Some(tcid) = &m.tool_call_id {
-                result_ids.insert(tcid.clone());
-            }
+            && let Some(tcid) = &m.tool_call_id
+        {
+            result_ids.insert(tcid.clone());
+        }
     }
 
-    let mut filtered: Vec<Message> = messages
-        .into_iter()
-        .filter(|m| {
-            if m.role == "tool"
-                && let Some(tcid) = &m.tool_call_id {
-                    return call_ids.contains(tcid);
+    // Build the sanitized list in original order, inserting synthetic stubs
+    // for any missing tool result immediately after the assistant message
+    // that originated the call. Appending stubs at the end (the previous
+    // behavior) reorders them past later user/assistant turns and breaks the
+    // assistant-tool ordering that chat backends require.
+    let mut out: Vec<Message> = Vec::with_capacity(messages.len());
+    for (idx, m) in messages.iter().enumerate() {
+        if m.role == "tool"
+            && let Some(tcid) = &m.tool_call_id
+            && !all_call_ids.contains(tcid)
+        {
+            // Drop tool messages whose originating call we never saw.
+            continue;
+        }
+        out.push(m.clone());
+        // After an assistant message, append stubs for any of its calls that
+        // never received a result.
+        if m.role == "assistant" {
+            for cid in &call_ids_per_msg[idx] {
+                if !result_ids.contains(cid) {
+                    out.push(Message {
+                        role: "tool".into(),
+                        content: "[Result cleared — see context summary]".into(),
+                        tool_results: None,
+                        timestamp: None,
+                        tool_calls: None,
+                        tool_call_id: Some(cid.clone()),
+                        importance: None,
+                        extra: Default::default(),
+                    });
                 }
-            true
-        })
-        .collect();
-
-    let orphaned: Vec<String> = call_ids
-        .iter()
-        .filter(|cid| !result_ids.contains(*cid))
-        .cloned()
-        .collect();
-
-    for cid in orphaned {
-        filtered.push(Message {
-            role: "tool".into(),
-            content: "[Result cleared — see context summary]".into(),
-            tool_results: None,
-            timestamp: None,
-            tool_calls: None,
-            tool_call_id: Some(cid),
-            importance: None,
-            extra: Default::default(),
-        });
+            }
+        }
     }
-
-    filtered
+    out
 }
 
 async fn compress(iii: &III, input: Value) -> Result<Value, IIIError> {
     let body = payload_body(&input);
-    let mut messages = parse_messages(&body["messages"]);
+    // Sanitize tool-pair consistency BEFORE the under-budget early return so
+    // callers always get back a self-consistent message list, even when the
+    // input was already within budget.
+    let mut messages = sanitize_tool_pairs(parse_messages(&body["messages"]));
     let target_tokens = body["targetTokens"]
         .as_i64()
         .ok_or_else(|| IIIError::Handler("targetTokens required".into()))?;
@@ -183,7 +196,8 @@ async fn compress(iii: &III, input: Value) -> Result<Value, IIIError> {
         }
     }
 
-    messages = sanitize_tool_pairs(messages);
+    // sanitize_tool_pairs was already applied at the top of compress(); no
+    // need to repeat it after the in-place tool summarization above.
 
     let mut merged: Vec<Message> = Vec::with_capacity(messages.len());
     for m in messages.into_iter() {
@@ -359,7 +373,8 @@ async fn compress(iii: &III, input: Value) -> Result<Value, IIIError> {
 }
 
 async fn stats(iii: &III, input: Value) -> Result<Value, IIIError> {
-    let messages = parse_messages(&input["messages"]);
+    let body = payload_body(&input);
+    let messages = parse_messages(&body["messages"]);
     let total_tokens = estimate_messages_tokens(&messages);
     let tool_messages = messages
         .iter()
@@ -638,6 +653,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         trigger_type: "http".into(),
         function_id: "context::compress".into(),
         config: json!({ "http_method": "POST", "api_path": "api/context/compress" }),
+        metadata: None,
+    })?;
+    iii.register_trigger(RegisterTriggerInput {
+        trigger_type: "http".into(),
+        function_id: "context::stats".into(),
+        config: json!({ "http_method": "POST", "api_path": "api/context/stats" }),
         metadata: None,
     })?;
     iii.register_trigger(RegisterTriggerInput {

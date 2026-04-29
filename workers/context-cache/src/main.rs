@@ -164,15 +164,17 @@ async fn invalidate(iii: &III, input: Value) -> Result<Value, IIIError> {
     let mut cleared = 0;
     if let Some(arr) = entries.as_array() {
         for entry in arr {
-            if let Some(k) = entry["key"].as_str() {
-                let _ = iii
+            if let Some(k) = entry["key"].as_str()
+                && iii
                     .trigger(TriggerRequest {
                         function_id: "state::delete".into(),
                         payload: json!({ "scope": &scope, "key": k }),
                         action: None,
                         timeout_ms: None,
                     })
-                    .await;
+                    .await
+                    .is_ok()
+            {
                 cleared += 1;
             }
         }
@@ -183,8 +185,11 @@ async fn invalidate(iii: &III, input: Value) -> Result<Value, IIIError> {
 
 async fn stats_fn(state: &State, input: Value) -> Result<Value, IIIError> {
     let body = payload_body(&input);
-    if let Some(agent_id) = body["agentId"].as_str() {
-        let stats = state.get(agent_id);
+    if let Some(agent_id_raw) = body["agentId"].as_str() {
+        // Stats are recorded under the sanitized id (see record_hit/miss in
+        // get_or_fetch); normalize here so a lookup with the raw id matches.
+        let agent_id = sanitize_id(agent_id_raw);
+        let stats = state.get(&agent_id);
         return Ok(serde_json::to_value(stats).unwrap_or(json!({})));
     }
     Ok(state.snapshot())
