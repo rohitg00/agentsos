@@ -1,0 +1,7 @@
+iii: v1
+name: channel-reddit
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-channel-reddit
+description: "Reddit channel adapter — handle webhook, reply via Reddit OAuth REST API"
