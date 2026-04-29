@@ -49,11 +49,8 @@ beforeEach(() => {
 });
 
 beforeAll(async () => {
-  process.env.WHATSAPP_TOKEN = "test-wa-token";
-  process.env.WHATSAPP_PHONE_ID = "123456";
   process.env.SIGNAL_API_URL = "http://signal-api:8080";
   process.env.SIGNAL_PHONE = "+1234567890";
-  await import("../channels/whatsapp.js");
   await import("../channels/signal.js");
 });
 
@@ -62,137 +59,6 @@ async function call(id: string, input: any) {
   if (!handler) throw new Error(`Handler ${id} not registered`);
   return handler(input);
 }
-
-describe("channel::whatsapp::webhook", () => {
-  it("registers the handler", () => {
-    expect(handlers["channel::whatsapp::webhook"]).toBeDefined();
-  });
-
-  it("ignores non-whatsapp_business_account objects", async () => {
-    const result = await call("channel::whatsapp::webhook", {
-      body: { object: "page" },
-    });
-    expect(result.status_code).toBe(200);
-    expect(result.body.ok).toBe(true);
-  });
-
-  it("ignores messages without text body", async () => {
-    const result = await call("channel::whatsapp::webhook", {
-      body: {
-        object: "whatsapp_business_account",
-        entry: [{ changes: [{ value: { messages: [{ from: "+1" }] } }] }],
-      },
-    });
-    expect(result.status_code).toBe(200);
-  });
-
-  it("processes valid text message", async () => {
-    const result = await call("channel::whatsapp::webhook", {
-      body: {
-        object: "whatsapp_business_account",
-        entry: [
-          {
-            changes: [
-              {
-                value: {
-                  messages: [
-                    { from: "+15551234567", text: { body: "Hello WA" } },
-                  ],
-                },
-              },
-            ],
-          },
-        ],
-      },
-    });
-    expect(result.status_code).toBe(200);
-  });
-
-  it("routes message to agent::chat", async () => {
-    await call("channel::whatsapp::webhook", {
-      body: {
-        object: "whatsapp_business_account",
-        entry: [
-          {
-            changes: [
-              {
-                value: {
-                  messages: [{ from: "+100", text: { body: "WA msg" } }],
-                },
-              },
-            ],
-          },
-        ],
-      },
-    });
-    const chatCalls = mockTrigger.mock.calls.filter(
-      (c) => c[0] === "agent::chat",
-    );
-    expect(chatCalls.length).toBe(1);
-    expect(chatCalls[0][1].message).toBe("WA msg");
-    expect(chatCalls[0][1].sessionId).toBe("whatsapp:+100");
-  });
-
-  it("sends reply via WhatsApp API", async () => {
-    await call("channel::whatsapp::webhook", {
-      body: {
-        object: "whatsapp_business_account",
-        entry: [
-          {
-            changes: [
-              {
-                value: {
-                  messages: [{ from: "+200", text: { body: "Test" } }],
-                },
-              },
-            ],
-          },
-        ],
-      },
-    });
-    expect(mockFetch).toHaveBeenCalledWith(
-      expect.stringContaining("graph.facebook.com"),
-      expect.objectContaining({ method: "POST" }),
-    );
-  });
-
-  it("emits audit event", async () => {
-    await call("channel::whatsapp::webhook", {
-      body: {
-        object: "whatsapp_business_account",
-        entry: [
-          {
-            changes: [
-              {
-                value: {
-                  messages: [{ from: "+300", text: { body: "Audit" } }],
-                },
-              },
-            ],
-          },
-        ],
-      },
-    });
-    expect(mockTriggerVoid).toHaveBeenCalledWith(
-      "security::audit",
-      expect.objectContaining({ type: "channel_message" }),
-    );
-  });
-
-  it("ignores missing entry array", async () => {
-    const result = await call("channel::whatsapp::webhook", {
-      body: { object: "whatsapp_business_account" },
-    });
-    expect(result.status_code).toBe(200);
-  });
-
-  it("ignores empty changes array", async () => {
-    const result = await call("channel::whatsapp::webhook", {
-      body: { object: "whatsapp_business_account", entry: [{ changes: [] }] },
-    });
-    expect(result.status_code).toBe(200);
-  });
-});
 
 describe("channel::signal::webhook", () => {
   it("registers the handler", () => {
