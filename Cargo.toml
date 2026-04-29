@@ -9,6 +9,7 @@ members = [
     "workers/approval",
     "workers/approval-tiers",
     "workers/bridge",
+    "workers/channel-linkedin",
     "workers/channel-reddit",
     "workers/channel-slack",
     "workers/coordination",
