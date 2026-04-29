@@ -53,22 +53,28 @@ async fn resolve_agent(iii: &III, channel_id: &str) -> String {
 }
 
 /// Split text into Slack-safe chunks, preferring newline boundaries.
+/// Character-aware (UTF-8 safe): never slices mid-codepoint.
 /// Mirrors `src/shared/utils.ts::splitMessage`.
 fn split_message(text: &str, max_len: usize) -> Vec<String> {
-    if text.len() <= max_len {
+    if text.chars().count() <= max_len {
         return vec![text.to_string()];
     }
     let mut chunks: Vec<String> = Vec::new();
     let mut remaining = text.to_string();
     while !remaining.is_empty() {
-        if remaining.len() <= max_len {
+        if remaining.chars().count() <= max_len {
             chunks.push(remaining);
             break;
         }
-        let window = &remaining[..max_len];
+        let cutoff = remaining
+            .char_indices()
+            .nth(max_len)
+            .map(|(idx, _)| idx)
+            .unwrap_or(remaining.len());
+        let window = &remaining[..cutoff];
         let split_at = match window.rfind('\n') {
-            Some(idx) if idx > max_len / 2 => idx,
-            _ => max_len,
+            Some(idx) if window[..idx].chars().count() > max_len / 2 => idx,
+            _ => cutoff,
         };
         chunks.push(remaining[..split_at].to_string());
         remaining = remaining[split_at..].to_string();
@@ -141,10 +147,20 @@ async fn slack_post_message(
             .send()
             .await
             .map_err(|e| IIIError::Handler(format!("Slack API error: {e}")))?;
+        let status = resp.status();
         last = resp
             .json::<Value>()
             .await
             .map_err(|e| IIIError::Handler(format!("Slack response decode: {e}")))?;
+        if !status.is_success() || last.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            let error = last
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown_error");
+            return Err(IIIError::Handler(format!(
+                "Slack chat.postMessage failed ({status}): {error}"
+            )));
+        }
     }
     Ok(last)
 }
@@ -201,12 +217,14 @@ async fn handle_events(
         }));
     }
 
-    let raw_body = match req.get("rawBody").and_then(|v| v.as_str()) {
-        Some(s) => s.to_string(),
-        None => serde_json::to_string(&body).unwrap_or_default(),
+    let Some(raw_body) = req.get("rawBody").and_then(|v| v.as_str()) else {
+        return Ok(json!({
+            "status_code": 400,
+            "body": { "error": "Missing rawBody for Slack signature verification" }
+        }));
     };
 
-    if let Err(e) = verify_slack_signature(&signing_secret, timestamp, signature, &raw_body) {
+    if let Err(e) = verify_slack_signature(&signing_secret, timestamp, signature, raw_body) {
         return Ok(json!({
             "status_code": 401,
             "body": { "error": e }
@@ -214,9 +232,14 @@ async fn handle_events(
     }
 
     // Dispatch user messages to agent::chat, then post the reply back to the channel.
+    // Excludes message subtypes (message_changed/deleted/etc) which lack top-level
+    // user/text fields and would otherwise dispatch with empty content.
     let event = body.get("event").cloned().unwrap_or(json!({}));
     let is_user_message = event.get("type").and_then(|v| v.as_str()) == Some("message")
-        && event.get("bot_id").is_none();
+        && event.get("subtype").is_none()
+        && event.get("bot_id").is_none()
+        && event.get("user").and_then(|v| v.as_str()).is_some()
+        && event.get("text").and_then(|v| v.as_str()).is_some();
 
     if is_user_message {
         let channel = event
@@ -263,14 +286,19 @@ async fn handle_events(
 
         if !reply.is_empty() {
             let bot_token = get_secret(iii, "SLACK_BOT_TOKEN").await;
-            let _ = slack_post_message(
+            // Only thread the reply when the inbound event was already in a thread.
+            // Top-level messages get top-level replies.
+            if let Err(e) = slack_post_message(
                 client,
                 &bot_token,
                 &channel,
                 reply,
-                thread_ts.as_deref().or(Some(&ts)),
+                thread_ts.as_deref(),
             )
-            .await;
+            .await
+            {
+                tracing::error!(channel = %channel, error = %e, "failed to post Slack reply");
+            }
         }
     }
 
@@ -451,18 +479,25 @@ mod tests {
         assert_eq!(body["challenge"], "abc123");
     }
 
+    fn classify(event: &Value) -> bool {
+        event.get("type").and_then(|v| v.as_str()) == Some("message")
+            && event.get("subtype").is_none()
+            && event.get("bot_id").is_none()
+            && event.get("user").and_then(|v| v.as_str()).is_some()
+            && event.get("text").and_then(|v| v.as_str()).is_some()
+    }
+
     #[test]
     fn ignores_bot_messages() {
         let event = json!({
             "type": "message",
             "text": "from bot",
+            "user": "U1",
             "channel": "C1",
             "ts": "1.0",
             "bot_id": "B123"
         });
-        let is_user_message = event.get("type").and_then(|v| v.as_str()) == Some("message")
-            && event.get("bot_id").is_none();
-        assert!(!is_user_message);
+        assert!(!classify(&event));
     }
 
     #[test]
@@ -470,11 +505,56 @@ mod tests {
         let event = json!({
             "type": "message",
             "text": "hi",
+            "user": "U1",
             "channel": "C1",
             "ts": "1.0"
         });
-        let is_user_message = event.get("type").and_then(|v| v.as_str()) == Some("message")
-            && event.get("bot_id").is_none();
-        assert!(is_user_message);
+        assert!(classify(&event));
+    }
+
+    #[test]
+    fn ignores_message_changed_subtype() {
+        let event = json!({
+            "type": "message",
+            "subtype": "message_changed",
+            "channel": "C1",
+            "ts": "1.0",
+            "message": { "text": "edited" }
+        });
+        assert!(!classify(&event));
+    }
+
+    #[test]
+    fn ignores_message_deleted_subtype() {
+        let event = json!({
+            "type": "message",
+            "subtype": "message_deleted",
+            "channel": "C1",
+            "ts": "1.0",
+            "deleted_ts": "0.5"
+        });
+        assert!(!classify(&event));
+    }
+
+    #[test]
+    fn ignores_message_missing_user() {
+        let event = json!({
+            "type": "message",
+            "text": "hi",
+            "channel": "C1",
+            "ts": "1.0"
+        });
+        assert!(!classify(&event));
+    }
+
+    #[test]
+    fn split_handles_multibyte_chars_without_panic() {
+        let text: String = "🦀".repeat(10);
+        let chunks = split_message(&text, 3);
+        let joined: String = chunks.concat();
+        assert_eq!(joined, text);
+        for chunk in &chunks {
+            assert!(chunk.chars().count() <= 3);
+        }
     }
 }

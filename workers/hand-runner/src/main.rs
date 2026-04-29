@@ -1,17 +1,27 @@
 use iii_sdk::error::IIIError;
-use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
+use iii_sdk::{
+    III, InitOptions, RegisterFunction, RegisterTriggerInput, Trigger, TriggerRequest,
+    register_worker,
+};
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
 
 mod types;
 
 use types::{Hand, HandFile};
 
 type HandRegistry = Arc<RwLock<HashMap<String, Hand>>>;
+
+struct CronEntry {
+    schedule: String,
+    trigger: Trigger,
+}
+
+type CronRegistry = Arc<Mutex<HashMap<String, CronEntry>>>;
 
 fn hands_dir() -> PathBuf {
     std::env::var("HANDS_DIR")
@@ -39,8 +49,16 @@ fn load_hands_from_dir(dir: &Path) -> anyhow::Result<HashMap<String, Hand>> {
         match std::fs::read_to_string(&toml_path) {
             Ok(raw) => match toml::from_str::<HandFile>(&raw) {
                 Ok(parsed) => {
-                    tracing::info!(id = %parsed.hand.id, "loaded hand");
-                    out.insert(parsed.hand.id.clone(), parsed.hand);
+                    let id = parsed.hand.id.clone();
+                    if out.contains_key(&id) {
+                        return Err(anyhow::anyhow!(
+                            "duplicate hand id `{}` in {}",
+                            id,
+                            toml_path.display()
+                        ));
+                    }
+                    tracing::info!(id = %id, "loaded hand");
+                    out.insert(id, parsed.hand);
                 }
                 Err(e) => {
                     tracing::error!(path = %toml_path.display(), error = %e, "failed to parse HAND.toml");
@@ -85,6 +103,7 @@ async fn run_hand(iii: &III, hand: Hand) -> Result<Value, IIIError> {
                 "systemPrompt": hand.agent.system_prompt,
                 "temperature": hand.agent.temperature,
                 "maxIterations": hand.agent.max_iterations,
+                "model": hand.agent.model,
             }),
             action: None,
             timeout_ms,
@@ -152,18 +171,62 @@ fn register_hand_function(iii: &III, hand_id: String, registry: HandRegistry) {
     );
 }
 
-fn register_cron_for_hand(iii: &III, hand: &Hand) -> Result<(), IIIError> {
+fn register_cron_for_hand(iii: &III, hand: &Hand) -> Result<Option<Trigger>, IIIError> {
     if hand.schedule.trim().is_empty() {
         tracing::warn!(id = %hand.id, "skipping cron registration: empty schedule");
-        return Ok(());
+        return Ok(None);
     }
-    iii.register_trigger(RegisterTriggerInput {
+    let trigger = iii.register_trigger(RegisterTriggerInput {
         trigger_type: "cron".into(),
         function_id: format!("hand::run::{}", hand.id),
         config: json!({ "schedule": hand.schedule }),
         metadata: None,
     })?;
-    Ok(())
+    Ok(Some(trigger))
+}
+
+async fn reconcile_cron(
+    iii: &III,
+    crons: &CronRegistry,
+    next: &HashMap<String, Hand>,
+) {
+    let mut guard = crons.lock().await;
+
+    let stale: Vec<String> = guard
+        .iter()
+        .filter(|(id, entry)| match next.get(*id) {
+            None => true,
+            Some(hand) => !hand.enabled || entry.schedule != hand.schedule,
+        })
+        .map(|(id, _)| id.clone())
+        .collect();
+    for id in stale {
+        if let Some(entry) = guard.remove(&id) {
+            entry.trigger.unregister();
+            tracing::info!(id = %id, "unregistered stale cron");
+        }
+    }
+
+    for (id, hand) in next.iter().filter(|(_, h)| h.enabled) {
+        if guard.contains_key(id) {
+            continue;
+        }
+        match register_cron_for_hand(iii, hand) {
+            Ok(Some(trigger)) => {
+                guard.insert(
+                    id.clone(),
+                    CronEntry {
+                        schedule: hand.schedule.clone(),
+                        trigger,
+                    },
+                );
+            }
+            Ok(None) => {}
+            Err(e) => {
+                tracing::error!(id = %id, error = %e, "failed to register cron");
+            }
+        }
+    }
 }
 
 #[tokio::main]
@@ -175,17 +238,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let dir = hands_dir();
     tracing::info!(dir = %dir.display(), "loading hands");
-    let initial = load_hands_from_dir(&dir).unwrap_or_default();
+    let initial = load_hands_from_dir(&dir)?;
     let registry: HandRegistry = Arc::new(RwLock::new(initial.clone()));
+    let crons: CronRegistry = Arc::new(Mutex::new(HashMap::new()));
 
-    for (id, hand) in initial.iter() {
+    for (id, _) in initial.iter() {
         register_hand_function(&iii, id.clone(), registry.clone());
-        if hand.enabled {
-            if let Err(e) = register_cron_for_hand(&iii, hand) {
-                tracing::error!(id = %id, error = %e, "failed to register cron");
-            }
-        }
     }
+    reconcile_cron(&iii, &crons, &initial).await;
 
     let registry_clone = registry.clone();
     iii.register_function(
@@ -220,10 +280,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let iii_clone = iii.clone();
     let registry_clone = registry.clone();
+    let crons_clone = crons.clone();
     iii.register_function(
         RegisterFunction::new_async("hand::reload", move |_input: Value| {
             let iii = iii_clone.clone();
             let registry = registry_clone.clone();
+            let crons = crons_clone.clone();
             async move {
                 let dir = hands_dir();
                 let next = load_hands_from_dir(&dir)
@@ -242,11 +304,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for id in &added {
                     register_hand_function(&iii, id.clone(), registry.clone());
                 }
-                for hand in next.values().filter(|h| h.enabled) {
-                    if let Err(e) = register_cron_for_hand(&iii, hand) {
-                        tracing::error!(id = %hand.id, error = %e, "failed to register cron on reload");
-                    }
-                }
+                reconcile_cron(&iii, &crons, &next).await;
                 Ok::<Value, IIIError>(json!({
                     "loaded": next.len(),
                     "addedFunctions": added,
