@@ -1,0 +1,7 @@
+iii: v1
+name: channel-teams
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-channel-teams
+description: "Microsoft Teams Bot Framework channel adapter"
