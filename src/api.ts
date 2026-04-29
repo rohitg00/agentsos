@@ -3,7 +3,7 @@ import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "@agentos/shared/confi
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { requireAuth, sanitizeId } from "@agentos/shared/utils";
-import { SECURITY_HEADERS } from "./security-headers.js";
+import { SECURITY_HEADERS } from "@agentos/shared/security-headers";
 import { safeInt } from "@agentos/shared/validate";
 import { safeCall } from "@agentos/shared/errors";
 import { shutdownManager } from "@agentos/shared/shutdown";

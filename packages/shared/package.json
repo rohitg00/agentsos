@@ -11,6 +11,7 @@
     "./metrics": "./src/metrics.ts",
     "./pricing": "./src/pricing.ts",
     "./secrets": "./src/secrets.ts",
+    "./security-headers": "./src/security-headers.ts",
     "./shutdown": "./src/shutdown.ts",
     "./tokens": "./src/tokens.ts",
     "./utils": "./src/utils.ts",

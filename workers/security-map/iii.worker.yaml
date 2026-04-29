@@ -1,0 +1,7 @@
+iii: v1
+name: security-map
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-security-map
+description: Mutual Authentication Protocol — challenge/respond/verify with HMAC-SHA256 over shared secrets

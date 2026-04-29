@@ -1,0 +1,7 @@
+iii: v1
+name: security-headers
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-security-headers
+description: HTTP security headers — apply and verify CSP/HSTS/etc.

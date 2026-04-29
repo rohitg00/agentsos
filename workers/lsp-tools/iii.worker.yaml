@@ -1,0 +1,7 @@
+iii: v1
+name: lsp-tools
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-lsp-tools
+description: Language Server Protocol bridge — diagnostics, symbols, references, rename, goto-definition

@@ -94,7 +94,7 @@ vi.mock("@agentos/shared/utils", () => ({
   sanitizeId: vi.fn((id: string) => id?.replace(/[^a-zA-Z0-9_-]/g, "")),
 }));
 
-vi.mock("../security-headers.js", () => ({
+vi.mock("@agentos/shared/security-headers", () => ({
   SECURITY_HEADERS: { "X-Frame-Options": "DENY" },
 }));
 

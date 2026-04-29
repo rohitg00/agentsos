@@ -1,0 +1,7 @@
+iii: v1
+name: security-zeroize
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-security-zeroize
+description: Secret zeroization — wrap secrets in zeroized buffers, scan KV state for leaks
