@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandFile {
     pub hand: Hand,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Hand {
     pub id: String,
     pub name: String,
@@ -30,12 +32,14 @@ fn default_enabled() -> bool {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandTools {
     #[serde(default)]
     pub allowed: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandSetting {
     pub key: String,
     #[serde(rename = "type", default)]
@@ -47,6 +51,7 @@ pub struct HandSetting {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandAgent {
     #[serde(default)]
     pub max_iterations: Option<u64>,
@@ -59,12 +64,14 @@ pub struct HandAgent {
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandDashboard {
     #[serde(default)]
     pub metrics: Vec<HandMetric>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct HandMetric {
     pub label: String,
     pub key: String,

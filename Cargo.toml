@@ -12,6 +12,7 @@ members = [
     "workers/council",
     "workers/cron",
     "workers/directive",
+    "workers/hand-runner",
     "workers/hashline",
     "workers/hierarchy",
     "workers/hooks",
