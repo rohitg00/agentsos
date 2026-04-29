@@ -53,7 +53,7 @@ async fn check(iii: &III, input: Value) -> Result<Value, IIIError> {
             timeout_ms: None,
         })
         .await
-        .unwrap_or(Value::Null);
+        .map_err(|e| IIIError::Handler(e.to_string()))?;
 
     if policy.is_null() {
         return Ok::<Value, IIIError>(json!({ "required": false }));
@@ -168,10 +168,14 @@ async fn decide(iii: &III, input: Value) -> Result<Value, IIIError> {
 
     let safe_request_id = sanitize_id(request_id).map_err(IIIError::Handler)?;
     let safe_agent_id = sanitize_id(agent_id).map_err(IIIError::Handler)?;
-    let status = if decision == "approve" {
-        "approved"
-    } else {
-        "denied"
+    let status = match decision {
+        "approve" => "approved",
+        "deny" => "denied",
+        other => {
+            return Err(IIIError::Handler(format!(
+                "Invalid decision: {other} (expected approve|deny)"
+            )));
+        }
     };
     let decided_by = input
         .get("decidedBy")
@@ -365,7 +369,16 @@ async fn wait(iii: &III, input: Value) -> Result<Value, IIIError> {
 }
 
 async fn set_policy(iii: &III, input: Value) -> Result<Value, IIIError> {
-    let tools = input.get("tools").cloned().unwrap_or(json!([]));
+    let tools_val = input.get("tools").cloned().unwrap_or(json!([]));
+    let tools_arr = tools_val
+        .as_array()
+        .ok_or_else(|| IIIError::Handler("tools must be an array".into()))?;
+    if !tools_arr.iter().all(|t| t.as_str().is_some()) {
+        return Err(IIIError::Handler(
+            "tools must contain only string patterns".into(),
+        ));
+    }
+    let tools = Value::Array(tools_arr.clone());
     let timeout_ms = input
         .get("timeoutMs")
         .and_then(Value::as_u64)

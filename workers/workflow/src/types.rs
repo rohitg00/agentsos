@@ -1,4 +1,4 @@
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -19,10 +19,29 @@ pub enum ErrorMode {
     Retry,
 }
 
+fn deserialize_sanitized_id<'de, D>(d: D) -> Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = String::deserialize(d)?;
+    sanitize_id(&raw).map_err(serde::de::Error::custom)
+}
+
+fn deserialize_sanitized_id_opt<'de, D>(d: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<String>::deserialize(d)?;
+    match raw {
+        None => Ok(None),
+        Some(s) => sanitize_id(&s).map(Some).map_err(serde::de::Error::custom),
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WorkflowStep {
     pub name: String,
-    #[serde(rename = "functionId")]
+    #[serde(rename = "functionId", deserialize_with = "deserialize_sanitized_id")]
     pub function_id: String,
     #[serde(default, rename = "promptTemplate", skip_serializing_if = "Option::is_none")]
     pub prompt_template: Option<String>,
@@ -33,7 +52,12 @@ pub struct WorkflowStep {
     pub error_mode: ErrorMode,
     #[serde(default, rename = "maxRetries", skip_serializing_if = "Option::is_none")]
     pub max_retries: Option<u32>,
-    #[serde(default, rename = "outputVar", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        rename = "outputVar",
+        skip_serializing_if = "Option::is_none",
+        deserialize_with = "deserialize_sanitized_id_opt"
+    )]
     pub output_var: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub condition: Option<String>,
@@ -45,6 +69,7 @@ pub struct WorkflowStep {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Workflow {
+    #[serde(deserialize_with = "deserialize_sanitized_id")]
     pub id: String,
     pub name: String,
     pub description: String,
@@ -126,5 +151,35 @@ mod tests {
         assert!(sanitize_id("").is_err());
         assert!(sanitize_id("with space").is_err());
         assert!(sanitize_id("bad/id").is_err());
+    }
+
+    #[test]
+    fn workflow_rejects_unsafe_function_id() {
+        let raw = json!({
+            "id": "wf-1",
+            "name": "x",
+            "description": "x",
+            "steps": [{
+                "name": "build",
+                "functionId": "echo/../../../bad",
+                "mode": "sequential",
+                "timeoutMs": 0,
+                "errorMode": "fail"
+            }]
+        });
+        let res: Result<Workflow, _> = serde_json::from_value(raw);
+        assert!(res.is_err(), "unsafe functionId must be rejected");
+    }
+
+    #[test]
+    fn workflow_rejects_unsafe_id() {
+        let raw = json!({
+            "id": "with space",
+            "name": "x",
+            "description": "x",
+            "steps": []
+        });
+        let res: Result<Workflow, _> = serde_json::from_value(raw);
+        assert!(res.is_err(), "unsafe id must be rejected");
     }
 }

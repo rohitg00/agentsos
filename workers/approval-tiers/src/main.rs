@@ -143,12 +143,18 @@ fn fire_and_forget(iii: &III, function_id: &str, payload: Value) {
 }
 
 fn validate_tier_input(input: &Value) -> Result<(), IIIError> {
-    if let Some(cost) = input.get("cost").and_then(Value::as_f64)
-        && (cost < 0.0 || !cost.is_finite())
-    {
-        return Err(IIIError::Handler(format!(
-            "invalid cost: {cost} (must be non-negative)"
-        )));
+    if let Some(raw_cost) = input.get("cost") {
+        if raw_cost.is_null() {
+            return Ok(());
+        }
+        let cost = raw_cost
+            .as_f64()
+            .ok_or_else(|| IIIError::Handler("invalid cost: must be a number".into()))?;
+        if cost < 0.0 || !cost.is_finite() {
+            return Err(IIIError::Handler(format!(
+                "invalid cost: {cost} (must be non-negative)"
+            )));
+        }
     }
     Ok(())
 }
@@ -451,10 +457,14 @@ async fn decide_tier_request(iii: &III, input: Value) -> Result<Value, IIIError>
 
     let safe_approval_id = sanitize_id(approval_id).map_err(IIIError::Handler)?;
     let safe_agent_id = sanitize_id(agent_id).map_err(IIIError::Handler)?;
-    let status = if decision == "approve" {
-        "approved"
-    } else {
-        "denied"
+    let status = match decision {
+        "approve" => "approved",
+        "deny" => "denied",
+        other => {
+            return Err(IIIError::Handler(format!(
+                "Invalid decision: {other} (expected approve|deny)"
+            )));
+        }
     };
     let decided_by = input
         .get("decidedBy")
@@ -607,6 +617,22 @@ mod tests {
     #[test]
     fn validate_accepts_missing_cost() {
         let ok = json!({ "toolId": "x" });
+        assert!(validate_tier_input(&ok).is_ok());
+    }
+
+    #[test]
+    fn validate_rejects_non_numeric_cost() {
+        let bad = json!({ "toolId": "x", "cost": "not-a-number" });
+        assert!(validate_tier_input(&bad).is_err());
+        let bad = json!({ "toolId": "x", "cost": [1, 2, 3] });
+        assert!(validate_tier_input(&bad).is_err());
+        let bad = json!({ "toolId": "x", "cost": true });
+        assert!(validate_tier_input(&bad).is_err());
+    }
+
+    #[test]
+    fn validate_accepts_null_cost() {
+        let ok = json!({ "toolId": "x", "cost": null });
         assert!(validate_tier_input(&ok).is_ok());
     }
 }

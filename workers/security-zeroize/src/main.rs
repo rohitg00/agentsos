@@ -90,9 +90,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .and_then(|v| v.as_u64())
                 .unwrap_or(AUTO_DISPOSE_MS);
 
-            let _id = wrap_secret(value, auto_dispose_ms);
+            let id = wrap_secret(value, auto_dispose_ms);
             Ok::<Value, IIIError>(json!({
                 "wrapped": true,
+                "id": id,
                 "autoDisposeMs": auto_dispose_ms,
             }))
         })
