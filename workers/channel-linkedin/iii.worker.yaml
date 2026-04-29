@@ -1,0 +1,7 @@
+iii: v1
+name: channel-linkedin
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-channel-linkedin
+description: "LinkedIn channel adapter — handle messaging webhook + reply via LinkedIn REST API"
