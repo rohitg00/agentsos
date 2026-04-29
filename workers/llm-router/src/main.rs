@@ -120,6 +120,8 @@ async fn call_anthropic(
         .send()
         .await
         .map_err(|e| IIIError::Handler(e.to_string()))?
+        .error_for_status()
+        .map_err(|e| IIIError::Handler(e.to_string()))?
         .json::<Value>()
         .await
         .map_err(|e| IIIError::Handler(e.to_string()))?;
@@ -155,6 +157,8 @@ async fn call_openai_compat(
     let resp = req.json(&body)
         .send()
         .await
+        .map_err(|e| IIIError::Handler(e.to_string()))?
+        .error_for_status()
         .map_err(|e| IIIError::Handler(e.to_string()))?
         .json::<Value>()
         .await

@@ -79,12 +79,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         RegisterFunction::new_async("agent::delete", move |input: Value| {
             let iii = iii_clone.clone();
             async move {
-                let agent_id = input["agentId"].as_str().unwrap_or("");
+                let agent_id = input["agentId"]
+                    .as_str()
+                    .filter(|s| !s.is_empty())
+                    .ok_or_else(|| IIIError::Handler("missing or empty agentId".into()))?
+                    .to_string();
                 iii.trigger(TriggerRequest {
                     function_id: "state::delete".to_string(),
                     payload: json!({
                     "scope": "agents",
-                    "key": agent_id,
+                    "key": &agent_id,
                 }),
                     action: None,
                     timeout_ms: None,
@@ -94,7 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let _iii = iii.clone();
                     let _payload = json!({
                     "topic": "agent.lifecycle",
-                    "data": { "type": "deleted", "agentId": agent_id },
+                    "data": { "type": "deleted", "agentId": &agent_id },
                 });
                     tokio::spawn(async move {
                         let _ = _iii.trigger(TriggerRequest {
@@ -338,25 +342,24 @@ async fn agent_chat(iii: &III, req: ChatRequest) -> Result<Value, IIIError> {
         });
     };
 
-    let _ = {
-        let _iii = iii.clone();
-        let _payload = json!({
-        "scope": "metering",
-        "key": &req.agent_id,
-        "operations": [
-            { "type": "increment", "path": "totalTokens", "value": response["usage"]["total"] },
-            { "type": "increment", "path": "invocations", "value": 1 },
-        ],
-    });
-        tokio::spawn(async move {
-            let _ = _iii.trigger(TriggerRequest {
-                function_id: "state::update".to_string(),
-                payload: _payload,
-                action: None,
-                timeout_ms: None,
-            }).await;
-        });
-    };
+    if let Err(e) = iii
+        .trigger(TriggerRequest {
+            function_id: "state::update".to_string(),
+            payload: json!({
+                "scope": "metering",
+                "key": &req.agent_id,
+                "operations": [
+                    { "type": "increment", "path": "totalTokens", "value": response["usage"]["total"] },
+                    { "type": "increment", "path": "invocations", "value": 1 },
+                ],
+            }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await
+    {
+        tracing::warn!(agent_id = %req.agent_id, error = %e, "metering update failed");
+    }
 
     Ok(json!({
         "content": response.get("content").and_then(|v| v.as_str()).unwrap_or(""),

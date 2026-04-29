@@ -96,22 +96,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     timeout_ms: None,
                 }).await.map_err(|e| IIIError::Handler(e.to_string()))?;
 
-                {
-                    let _iii = iii.clone();
-                    let _payload = json!({
-                    "type": "capabilities_updated",
-                    "agentId": agent_id,
-                    "detail": { "tools": caps["tools"].as_array().map(|a| a.len()).unwrap_or(0) },
-                });
-                    tokio::spawn(async move {
-                        let _ = _iii.trigger(TriggerRequest {
-                            function_id: "security::audit".to_string(),
-                            payload: _payload,
-                            action: None,
-                            timeout_ms: None,
-                        }).await;
-                    });
-                };
+                iii.trigger(TriggerRequest {
+                    function_id: "security::audit".to_string(),
+                    payload: json!({
+                        "type": "capabilities_updated",
+                        "agentId": agent_id,
+                        "detail": { "tools": caps["tools"].as_array().map(|a| a.len()).unwrap_or(0) },
+                    }),
+                    action: None,
+                    timeout_ms: None,
+                })
+                .await
+                .map_err(|e| IIIError::Handler(format!("audit emission failed: {e}")))?;
 
                 Ok::<Value, IIIError>(json!({ "updated": true }))
             }
@@ -217,22 +213,21 @@ async fn check_capability(iii: &III, input: Value) -> Result<Value, IIIError> {
     let allowed = tools.iter().any(|t| *t == "*" || resource.starts_with(t));
 
     if !allowed {
+        if let Err(e) = iii
+            .trigger(TriggerRequest {
+                function_id: "security::audit".to_string(),
+                payload: json!({
+                    "type": "capability_denied",
+                    "agentId": agent_id,
+                    "detail": { "resource": resource, "reason": "tool_not_allowed" },
+                }),
+                action: None,
+                timeout_ms: None,
+            })
+            .await
         {
-            let _iii = iii.clone();
-            let _payload = json!({
-            "type": "capability_denied",
-            "agentId": agent_id,
-            "detail": { "resource": resource, "reason": "tool_not_allowed" },
-        });
-            tokio::spawn(async move {
-                let _ = _iii.trigger(TriggerRequest {
-                    function_id: "security::audit".to_string(),
-                    payload: _payload,
-                    action: None,
-                    timeout_ms: None,
-                }).await;
-            });
-        };
+            tracing::error!(agent_id = %agent_id, error = %e, "audit emission failed for capability_denied");
+        }
         return Err(IIIError::Handler(format!("Agent {} denied: {}", agent_id, resource)));
     }
 
@@ -250,22 +245,21 @@ async fn check_capability(iii: &III, input: Value) -> Result<Value, IIIError> {
 
         let used = usage["totalTokens"].as_u64().unwrap_or(0);
         if used > max_tokens {
+            if let Err(e) = iii
+                .trigger(TriggerRequest {
+                    function_id: "security::audit".to_string(),
+                    payload: json!({
+                        "type": "quota_exceeded",
+                        "agentId": agent_id,
+                        "detail": { "used": used, "limit": max_tokens },
+                    }),
+                    action: None,
+                    timeout_ms: None,
+                })
+                .await
             {
-                let _iii = iii.clone();
-                let _payload = json!({
-                "type": "quota_exceeded",
-                "agentId": agent_id,
-                "detail": { "used": used, "limit": max_tokens },
-            });
-                tokio::spawn(async move {
-                    let _ = _iii.trigger(TriggerRequest {
-                        function_id: "security::audit".to_string(),
-                        payload: _payload,
-                        action: None,
-                        timeout_ms: None,
-                    }).await;
-                });
-            };
+                tracing::error!(agent_id = %agent_id, error = %e, "audit emission failed for quota_exceeded");
+            }
             return Err(IIIError::Handler(format!("Agent {} exceeded token quota", agent_id)));
         }
     }

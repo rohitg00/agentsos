@@ -13,11 +13,15 @@ let realmId = "";
 let missionId = "";
 let proposalId = "";
 
-async function call<T = unknown>(fn: string, payload: unknown): Promise<T> {
+async function call<T = unknown>(
+  fn: string,
+  payload: unknown,
+  timeoutMs = 30_000,
+): Promise<T> {
   const result = await sdk.trigger({
     function_id: fn,
     payload,
-    timeout_ms: 30_000,
+    timeout_ms: timeoutMs,
   });
   return result as T;
 }
@@ -214,17 +218,21 @@ suite("AgentOS full-stack E2E", () => {
       content: string;
       model: string;
       usage: { input: number; output: number; total: number };
-    }>("llm::complete", {
-      provider: "anthropic",
-      model: "claude-haiku-4-5-20251001",
-      messages: [
-        {
-          role: "user",
-          content: "Reply with the word READY only, no punctuation.",
-        },
-      ],
-      max_tokens: 50,
-    });
+    }>(
+      "llm::complete",
+      {
+        provider: "anthropic",
+        model: "claude-haiku-4-5-20251001",
+        messages: [
+          {
+            role: "user",
+            content: "Reply with the word READY only, no punctuation.",
+          },
+        ],
+        max_tokens: 50,
+      },
+      85_000,
+    );
     expect(r.content.toUpperCase()).toContain("READY");
     expect(r.usage.input).toBeGreaterThan(0);
     expect(r.usage.output).toBeGreaterThan(0);
@@ -241,6 +249,7 @@ suite("AgentOS full-stack E2E", () => {
         agentId: "agent-e2e",
         message: "What is 17 times 23? Reply with just the number.",
       },
+      115_000,
     );
     expect(r.content).toContain("391");
     expect(r.durationMs).toBeGreaterThan(0);
