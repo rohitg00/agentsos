@@ -116,6 +116,34 @@ async fn state_set(iii: &III, scope: &str, key: &str, value: Value) -> Result<()
     Ok(())
 }
 
+/// Atomic increment of an integer counter at scope/key. Returns the post-increment value.
+async fn state_increment(
+    iii: &III,
+    scope: &str,
+    key: &str,
+    delta: i64,
+) -> Result<i64, IIIError> {
+    let res = iii
+        .trigger(TriggerRequest {
+            function_id: "state::update".to_string(),
+            payload: json!({
+                "scope": scope,
+                "key": key,
+                "operations": [
+                    { "type": "increment", "path": "", "value": delta },
+                ],
+            }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await
+        .map_err(|e| IIIError::Handler(e.to_string()))?;
+    Ok(res
+        .as_i64()
+        .or_else(|| res.get("value").and_then(|v| v.as_i64()))
+        .unwrap_or(0))
+}
+
 async fn get_agent_index(iii: &III) -> Vec<String> {
     state_get(iii, "loop_guard_history", "_index")
         .await
@@ -208,12 +236,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let params = input.get("params").cloned().unwrap_or(json!({}));
                 let result_hash = input["resultHash"].as_str().map(String::from);
 
-                let prev_calls = state_get(&iii, "loop_guard_counts", &agent_id)
-                    .await
-                    .and_then(|v| v.as_i64())
-                    .unwrap_or(0);
-                let agent_calls = prev_calls + 1;
-                state_set(&iii, "loop_guard_counts", &agent_id, json!(agent_calls)).await?;
+                // Atomic increment so overlapping guard::check calls each see a unique
+                // post-increment value rather than racing on a read-modify-write.
+                let agent_calls = state_increment(&iii, "loop_guard_counts", &agent_id, 1).await?;
 
                 if agent_calls > PER_AGENT_CIRCUIT_BREAKER {
                     return Ok::<Value, IIIError>(json!({
@@ -303,18 +328,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 if identical_count >= warn_at {
                     let bucket_key = format!("{agent_id}:{call_hash}");
-                    let prev_warnings = state_get(&iii, "loop_guard_warnings", &bucket_key)
-                        .await
-                        .and_then(|v| v.as_i64())
-                        .unwrap_or(0);
-                    let warnings = prev_warnings + 1;
-                    state_set(
-                        &iii,
-                        "loop_guard_warnings",
-                        &bucket_key,
-                        json!(warnings),
-                    )
-                    .await?;
+                    // Atomic increment to avoid lost warnings under concurrent checks.
+                    let warnings =
+                        state_increment(&iii, "loop_guard_warnings", &bucket_key, 1).await?;
 
                     let mut warn_keys = get_warning_keys(&iii, &agent_id).await;
                     if !warn_keys.contains(&bucket_key) {
