@@ -421,17 +421,19 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentos-lsp-tools"
+name = "agentos-mcp-client"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "chrono",
+ "dashmap",
  "iii-sdk",
- "regex",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "uuid",
 ]
 
 [[package]]

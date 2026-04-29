@@ -15,7 +15,6 @@ import "./cost-tracker.js";
 import "./dashboard.js";
 import "./hand-runner.js";
 import "./knowledge-graph.js";
-import "./mcp-client.js";
 import "./memory-reflection.js";
 import "./migration.js";
 import "./model-catalog.js";

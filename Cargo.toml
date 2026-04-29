@@ -25,6 +25,7 @@ members = [
     "workers/hooks",
     "workers/ledger",
     "workers/llm-router",
+    "workers/mcp-client",
     "workers/loop-guard",
     "workers/lsp-tools",
     "workers/memory",
