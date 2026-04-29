@@ -123,25 +123,20 @@ fn gcra_compute(
 ) -> (RateCheckResult, Option<GcraState>) {
     let increment = cost * emission_interval_ms;
 
-    if state.is_none() {
-        let new_tat = now + increment;
-        let new_state = GcraState {
-            tat: new_tat,
-            tokens: (burst_limit - cost) as i64,
-        };
+    if cost > burst_limit {
+        let retry_after_secs = ((cost - burst_limit) * emission_interval_ms / 1000.0).ceil() as i64;
         return (
             RateCheckResult {
-                allowed: true,
-                remaining: (burst_limit - cost) as i64,
-                retry_after: None,
+                allowed: false,
+                remaining: 0,
+                retry_after: Some(retry_after_secs.max(1)),
                 limit: tokens_per_minute,
             },
-            Some(new_state),
+            None,
         );
     }
 
-    let state = state.unwrap();
-    let tat = state.tat.max(now);
+    let tat = state.map(|s| s.tat).unwrap_or(now).max(now);
     let new_tat = tat + increment;
     let allow_at = new_tat - burst_limit * emission_interval_ms;
 
@@ -277,7 +272,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let remaining = (((BURST_LIMIT * EMISSION_INTERVAL_MS - (s.tat - now))
                         / EMISSION_INTERVAL_MS)
                         .floor() as i64)
-                        .max(0);
+                        .clamp(0, TOKENS_PER_MINUTE as i64);
                     Ok::<Value, IIIError>(json!({
                         "ip": ip,
                         "remaining": remaining,
@@ -411,27 +406,55 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .as_i64()
                     .filter(|v| *v > 0)
                     .unwrap_or(DEFAULT_AGENT_MAX_CONCURRENT);
-                let current = state_get(&iii, "rate_concurrent", &agent_id)
+
+                // Atomic increment via state::update.
+                let updated = iii
+                    .trigger(TriggerRequest {
+                        function_id: "state::update".to_string(),
+                        payload: json!({
+                            "scope": "rate_concurrent",
+                            "key": &agent_id,
+                            "operations": [
+                                { "type": "increment", "path": "", "value": 1 },
+                            ],
+                        }),
+                        action: None,
+                        timeout_ms: None,
+                    })
                     .await
-                    .and_then(|v| v.as_i64())
+                    .map_err(|e| IIIError::Handler(e.to_string()))?;
+
+                let new_count = updated
+                    .as_i64()
+                    .or_else(|| updated.get("value").and_then(|v| v.as_i64()))
                     .unwrap_or(0);
-                if current >= limit {
+
+                if new_count > limit {
+                    // Roll back the speculative increment.
+                    let _ = iii
+                        .trigger(TriggerRequest {
+                            function_id: "state::update".to_string(),
+                            payload: json!({
+                                "scope": "rate_concurrent",
+                                "key": &agent_id,
+                                "operations": [
+                                    { "type": "increment", "path": "", "value": -1 },
+                                ],
+                            }),
+                            action: None,
+                            timeout_ms: None,
+                        })
+                        .await;
                     return Ok::<Value, IIIError>(json!({
                         "acquired": false,
-                        "current": current,
+                        "current": new_count - 1,
                         "limit": limit,
                     }));
                 }
-                state_set(
-                    &iii,
-                    "rate_concurrent",
-                    &agent_id,
-                    json!(current + 1),
-                )
-                .await?;
+
                 Ok::<Value, IIIError>(json!({
                     "acquired": true,
-                    "current": current + 1,
+                    "current": new_count,
                     "limit": limit,
                 }))
             }
@@ -445,13 +468,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iii = iii_ref.clone();
             async move {
                 let agent_id = input["agentId"].as_str().unwrap_or("").to_string();
-                let current = state_get(&iii, "rate_concurrent", &agent_id)
+
+                // Atomic decrement via state::update; clamp to zero afterwards.
+                let updated = iii
+                    .trigger(TriggerRequest {
+                        function_id: "state::update".to_string(),
+                        payload: json!({
+                            "scope": "rate_concurrent",
+                            "key": &agent_id,
+                            "operations": [
+                                { "type": "increment", "path": "", "value": -1 },
+                            ],
+                        }),
+                        action: None,
+                        timeout_ms: None,
+                    })
                     .await
-                    .and_then(|v| v.as_i64())
+                    .map_err(|e| IIIError::Handler(e.to_string()))?;
+
+                let new_count = updated
+                    .as_i64()
+                    .or_else(|| updated.get("value").and_then(|v| v.as_i64()))
                     .unwrap_or(0);
-                let next = (current - 1).max(0);
-                state_set(&iii, "rate_concurrent", &agent_id, json!(next)).await?;
-                Ok::<Value, IIIError>(json!({ "released": true, "current": next }))
+
+                if new_count < 0 {
+                    // Counter underflow — clamp by setting to zero.
+                    state_set(&iii, "rate_concurrent", &agent_id, json!(0)).await?;
+                    return Ok::<Value, IIIError>(json!({ "released": true, "current": 0 }));
+                }
+
+                Ok::<Value, IIIError>(json!({ "released": true, "current": new_count }))
             }
         })
         .description("Release concurrent invocation slot for an agent"),
@@ -635,11 +681,12 @@ mod tests {
     }
 
     #[test]
-    fn very_large_cost_first_request() {
+    fn over_burst_first_request_rejected() {
         let mut state = None;
         let r = check(&mut state, 10000.0, 1000.0);
-        assert!(r.allowed);
-        assert_eq!(r.remaining, (BURST_LIMIT as i64) - 10000);
+        assert!(!r.allowed);
+        assert_eq!(r.remaining, 0);
+        assert!(r.retry_after.is_some());
     }
 
     #[test]

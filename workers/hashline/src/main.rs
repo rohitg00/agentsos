@@ -33,13 +33,12 @@ pub fn compute_line_hash(line_number: i64, content: &str) -> String {
     let seed: i32 = if has_alnum { 0 } else { line_number as i32 };
 
     let mut hash: i32 = 0;
-    for ch in stripped.chars() {
-        // JS: charCodeAt returns UTF-16 code unit. For BMP chars this equals u32 code point;
-        // for non-BMP it's a surrogate. For ASCII source we mimic with u32 codepoints.
-        let code = ch as u32 as i32;
+    // Iterate UTF-16 code units to match JS `charCodeAt()` semantics so non-BMP
+    // characters (emoji, astral plane) produce the same hash as the TS reference.
+    for unit in stripped.encode_utf16() {
+        let code = unit as i32;
         let shifted = hash.wrapping_shl(5);
         hash = shifted.wrapping_sub(hash).wrapping_add(code).wrapping_add(seed);
-        // `| 0` is a no-op for i32 wrapping arithmetic since result is already 32-bit.
     }
     let unsigned = hash as u32;
     let idx = (unsigned % 256) as usize;
@@ -113,21 +112,26 @@ struct EditInput {
     lines: Value,
 }
 
-fn normalize_edit_lines(v: &Value) -> Option<Vec<String>> {
+fn normalize_edit_lines(v: &Value) -> Result<Option<Vec<String>>, IIIError> {
     if v.is_null() {
-        return None;
+        return Ok(None);
     }
     if let Some(s) = v.as_str() {
-        return Some(s.split('\n').map(String::from).collect());
+        return Ok(Some(s.split('\n').map(String::from).collect()));
     }
     if let Some(arr) = v.as_array() {
-        return Some(
-            arr.iter()
-                .map(|x| x.as_str().unwrap_or("").to_string())
-                .collect(),
-        );
+        let mut out = Vec::with_capacity(arr.len());
+        for x in arr {
+            let s = x.as_str().ok_or_else(|| {
+                IIIError::Handler("edit lines array must contain only strings".into())
+            })?;
+            out.push(s.to_string());
+        }
+        return Ok(Some(out));
     }
-    None
+    Err(IIIError::Handler(
+        "edit lines must be a string, string array, or null".into(),
+    ))
 }
 
 #[derive(Debug, Clone)]
@@ -152,7 +156,7 @@ fn parse_edits(edits: &[EditInput]) -> Result<Vec<ParsedEdit>, IIIError> {
             None => None,
         };
         let lines_present = !e.lines.is_null();
-        let lines = normalize_edit_lines(&e.lines);
+        let lines = normalize_edit_lines(&e.lines)?;
         parsed.push(ParsedEdit {
             op: e.op.clone(),
             pos,
@@ -341,6 +345,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let resolved = workspace_root().join(&path);
                 assert_path_contained(&resolved)?;
 
+                // CONSISTENCY MODEL: hashline_edit assumes single-writer
+                // semantics. The hash anchor check rejects edits that don't
+                // match the current content, so two concurrent edits cannot
+                // both succeed against the same line — the second write will
+                // mismatch. Cross-process file locking (e.g. flock) is a
+                // separate concern tracked in CR PR #49 (hashline:355).
                 let content = tokio::fs::read_to_string(&resolved)
                     .await
                     .map_err(|e| IIIError::Handler(e.to_string()))?;
@@ -422,30 +432,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let parsed = parse_edits(&edits)?;
                 let edited_lines = apply_edits(&original_lines, &parsed)?;
 
-                let mut diff = Vec::new();
-                let mut i = 0usize;
-                let mut j = 0usize;
-                while i < original_lines.len() || j < edited_lines.len() {
-                    if i < original_lines.len() && j < edited_lines.len() {
-                        if original_lines[i] == edited_lines[j] {
-                            diff.push(format!(" {}", original_lines[i]));
-                            i += 1;
-                            j += 1;
-                        } else {
-                            diff.push(format!("-{}", original_lines[i]));
-                            i += 1;
-                            if j < edited_lines.len() {
-                                diff.push(format!("+{}", edited_lines[j]));
-                                j += 1;
-                            }
-                        }
-                    } else if i < original_lines.len() {
-                        diff.push(format!("-{}", original_lines[i]));
-                        i += 1;
-                    } else {
-                        diff.push(format!("+{}", edited_lines[j]));
-                        j += 1;
-                    }
+                // Use a proper LCS-based diff so insertions/deletions don't
+                // misalign the rest of the file (lockstep walking is incorrect).
+                let original_refs: Vec<&str> =
+                    original_lines.iter().map(String::as_str).collect();
+                let edited_refs: Vec<&str> =
+                    edited_lines.iter().map(String::as_str).collect();
+                let diff_engine = similar::TextDiff::from_slices(&original_refs, &edited_refs);
+                let mut diff: Vec<String> = Vec::new();
+                for change in diff_engine.iter_all_changes() {
+                    let line = change.value();
+                    let entry = match change.tag() {
+                        similar::ChangeTag::Equal => format!(" {line}"),
+                        similar::ChangeTag::Delete => format!("-{line}"),
+                        similar::ChangeTag::Insert => format!("+{line}"),
+                    };
+                    diff.push(entry);
                 }
 
                 let _ = _iii.trigger(TriggerRequest {
@@ -702,12 +704,24 @@ mod tests {
     #[test]
     fn normalize_edit_lines_string_splits_on_newline() {
         let v = json!("a\nb\nc");
-        let out = normalize_edit_lines(&v).unwrap();
+        let out = normalize_edit_lines(&v).unwrap().unwrap();
         assert_eq!(out, vec!["a", "b", "c"]);
     }
 
     #[test]
     fn normalize_edit_lines_null_returns_none() {
-        assert!(normalize_edit_lines(&Value::Null).is_none());
+        assert!(normalize_edit_lines(&Value::Null).unwrap().is_none());
+    }
+
+    #[test]
+    fn normalize_edit_lines_rejects_non_string_array_element() {
+        let v = json!(["ok", 42]);
+        assert!(normalize_edit_lines(&v).is_err());
+    }
+
+    #[test]
+    fn normalize_edit_lines_rejects_object() {
+        let v = json!({ "not": "valid" });
+        assert!(normalize_edit_lines(&v).is_err());
     }
 }

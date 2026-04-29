@@ -42,7 +42,7 @@ fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
 
-async fn state_get(iii: &III, scope: &str, key: &str) -> Option<Value> {
+async fn state_get(iii: &III, scope: &str, key: &str) -> Result<Option<Value>, IIIError> {
     let res = iii
         .trigger(TriggerRequest {
             function_id: "state::get".to_string(),
@@ -51,21 +51,21 @@ async fn state_get(iii: &III, scope: &str, key: &str) -> Option<Value> {
             timeout_ms: None,
         })
         .await
-        .ok()?;
-    if res.is_null() { None } else { Some(res) }
+        .map_err(|e| IIIError::Handler(e.to_string()))?;
+    Ok(if res.is_null() { None } else { Some(res) })
 }
 
-async fn state_list(iii: &III, scope: &str) -> Vec<Value> {
-    iii.trigger(TriggerRequest {
-        function_id: "state::list".to_string(),
-        payload: json!({ "scope": scope }),
-        action: None,
-        timeout_ms: None,
-    })
-    .await
-    .ok()
-    .and_then(|v| v.as_array().cloned())
-    .unwrap_or_default()
+async fn state_list(iii: &III, scope: &str) -> Result<Vec<Value>, IIIError> {
+    let res = iii
+        .trigger(TriggerRequest {
+            function_id: "state::list".to_string(),
+            payload: json!({ "scope": scope }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await
+        .map_err(|e| IIIError::Handler(e.to_string()))?;
+    Ok(res.as_array().cloned().unwrap_or_default())
 }
 
 async fn state_set(iii: &III, scope: &str, key: &str, value: Value) -> Result<(), IIIError> {
@@ -107,8 +107,8 @@ fn fire_and_forget(iii: &III, function_id: &str, payload: Value) {
     });
 }
 
-async fn load_hooks(iii: &III) -> Vec<HookDefinition> {
-    let entries = state_list(iii, "hooks").await;
+async fn load_hooks(iii: &III) -> Result<Vec<HookDefinition>, IIIError> {
+    let entries = state_list(iii, "hooks").await?;
     let mut out = Vec::new();
     for e in entries {
         // entries can be either {key, value} or just the value, depending on engine
@@ -119,7 +119,7 @@ async fn load_hooks(iii: &III) -> Vec<HookDefinition> {
             }
         }
     }
-    out
+    Ok(out)
 }
 
 async fn save_hook(iii: &III, hook: &HookDefinition) -> Result<(), IIIError> {
@@ -162,6 +162,24 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let priority = input["priority"].as_i64().unwrap_or(100);
                 let agent_id = input["agentId"].as_str().map(String::from);
                 let filter = input.get("filter").cloned().filter(|v| !v.is_null());
+
+                // Validate tool-call filter shape up front so hook::fire can
+                // trust filter.toolIds is an array of strings (or absent).
+                let is_tool_call =
+                    matches!(hook_type.as_str(), "BeforeToolCall" | "AfterToolCall");
+                if let (true, Some(tool_ids)) = (
+                    is_tool_call,
+                    filter.as_ref().and_then(|f| f.get("toolIds")),
+                ) {
+                    let arr = tool_ids.as_array().ok_or_else(|| {
+                        IIIError::Handler("filter.toolIds must be an array of strings".into())
+                    })?;
+                    if !arr.iter().all(|v| v.is_string()) {
+                        return Err(IIIError::Handler(
+                            "filter.toolIds must contain only strings".into(),
+                        ));
+                    }
+                }
 
                 let hook = HookDefinition {
                     id: hook_id.clone(),
@@ -209,7 +227,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iii = iii_ref.clone();
             async move {
                 let hook_id = input["hookId"].as_str().unwrap_or("").to_string();
-                let raw = state_get(&iii, "hooks", &hook_id).await;
+                let raw = state_get(&iii, "hooks", &hook_id).await?;
                 let hook: HookDefinition = match raw.and_then(|v| serde_json::from_value(v).ok()) {
                     Some(h) => h,
                     None => {
@@ -247,7 +265,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let payload = input.get("payload").cloned().unwrap_or(json!({}));
                 let agent_id = input["agentId"].as_str().map(String::from);
 
-                let all_hooks = load_hooks(&iii).await;
+                let all_hooks = load_hooks(&iii).await?;
 
                 let payload_agent_id = payload.get("agentId").and_then(|v| v.as_str()).map(String::from);
 
@@ -373,7 +391,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let agent_id_filter = input.get("agentId").and_then(|v| v.as_str()).map(String::from);
                 let enabled_only = input.get("enabledOnly").and_then(|v| v.as_bool()).unwrap_or(false);
 
-                let mut hooks = load_hooks(&iii).await;
+                let mut hooks = load_hooks(&iii).await?;
                 if let Some(t) = &type_filter {
                     hooks.retain(|h| h.hook_type == *t);
                 }
@@ -425,9 +443,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iii = iii_ref.clone();
             async move {
                 let hook_id = input["hookId"].as_str().unwrap_or("").to_string();
-                let enabled = input["enabled"].as_bool().unwrap_or(false);
+                let enabled = input
+                    .get("enabled")
+                    .and_then(Value::as_bool)
+                    .ok_or_else(|| IIIError::Handler("enabled must be a boolean".into()))?;
 
-                let raw = state_get(&iii, "hooks", &hook_id).await;
+                let raw = state_get(&iii, "hooks", &hook_id).await?;
                 let mut hook: HookDefinition = match raw.and_then(|v| serde_json::from_value(v).ok()) {
                     Some(h) => h,
                     None => {
@@ -455,9 +476,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let iii = iii_ref.clone();
             async move {
                 let hook_id = input["hookId"].as_str().unwrap_or("").to_string();
-                let priority = input["priority"].as_i64().unwrap_or(100);
+                let priority = input
+                    .get("priority")
+                    .and_then(Value::as_i64)
+                    .ok_or_else(|| IIIError::Handler("priority must be an integer".into()))?;
 
-                let raw = state_get(&iii, "hooks", &hook_id).await;
+                let raw = state_get(&iii, "hooks", &hook_id).await?;
                 let mut hook: HookDefinition = match raw.and_then(|v| serde_json::from_value(v).ok()) {
                     Some(h) => h,
                     None => {
