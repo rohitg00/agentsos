@@ -494,6 +494,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentos-lsp-tools"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "iii-sdk",
+ "regex",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agentos-memory"
 version = "0.0.1"
 dependencies = [
@@ -590,48 +604,69 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentos-session-lifecycle"
+name = "agentos-security-headers"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "chrono",
  "iii-sdk",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
-name = "agentos-session-replay"
+name = "agentos-security-map"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "chrono",
+ "ed25519-dalek",
+ "hex",
+ "hmac",
  "iii-sdk",
+ "rand 0.8.6",
  "serde",
  "serde_json",
+ "sha2",
+ "subtle",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]
-name = "agentos-streaming"
+name = "agentos-security-zeroize"
 version = "0.0.1"
 dependencies = [
  "anyhow",
- "chrono",
+ "dashmap",
  "iii-sdk",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
  "tracing",
  "tracing-subscriber",
- "uuid",
+ "zeroize",
+]
+
+[[package]]
+name = "agentos-skill-security"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "base64",
+ "ed25519-dalek",
+ "iii-sdk",
+ "regex",
+ "serde",
+ "serde_json",
+ "spki",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

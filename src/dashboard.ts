@@ -1,7 +1,7 @@
 import { registerWorker } from "iii-sdk";
 import { ENGINE_URL, OTEL_CONFIG, registerShutdown } from "@agentos/shared/config";
 import { requireAuth } from "@agentos/shared/utils";
-import { SECURITY_HEADERS } from "./security-headers.js";
+import { SECURITY_HEADERS } from "@agentos/shared/security-headers";
 import { safeCall } from "@agentos/shared/errors";
 
 const sdk = registerWorker(ENGINE_URL, {

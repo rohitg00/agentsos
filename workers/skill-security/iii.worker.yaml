@@ -1,0 +1,7 @@
+iii: v1
+name: skill-security
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-skill-security
+description: Skill capability gating — Ed25519 signature verification, content scanning, sandbox checks

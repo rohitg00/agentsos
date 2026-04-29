@@ -66,7 +66,7 @@ vi.mock("@agentos/shared/utils", () => ({
   requireAuth: vi.fn(),
 }));
 
-vi.mock("../security-headers.js", () => ({
+vi.mock("@agentos/shared/security-headers", () => ({
   SECURITY_HEADERS: { "X-Frame-Options": "DENY" },
 }));
 

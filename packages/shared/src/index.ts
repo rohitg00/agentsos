@@ -1,5 +1,6 @@
 export * from "./config.js";
 export * from "./errors.js";
+export * from "./security-headers.js";
 export * from "./metrics.js";
 export * from "./pricing.js";
 export * from "./secrets.js";

@@ -1,0 +1,21 @@
+[package]
+name = "agentos-security-zeroize"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "agentos-security-zeroize"
+path = "src/main.rs"
+
+[dependencies]
+iii-sdk.workspace = true
+tokio.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+regex = "1"
+zeroize = "1"
+dashmap.workspace = true
