@@ -588,7 +588,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "agentos-security-headers"
+name = "agentos-skillkit-bridge"
 version = "0.0.1"
 dependencies = [
  "anyhow",
@@ -596,58 +596,6 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "agentos-security-map"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "ed25519-dalek",
- "hex",
- "hmac",
- "iii-sdk",
- "rand 0.8.6",
- "serde",
- "serde_json",
- "sha2",
- "subtle",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "agentos-security-zeroize"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "dashmap",
- "iii-sdk",
- "regex",
- "serde",
- "serde_json",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "zeroize",
-]
-
-[[package]]
-name = "agentos-skill-security"
-version = "0.0.1"
-dependencies = [
- "anyhow",
- "base64",
- "ed25519-dalek",
- "iii-sdk",
- "regex",
- "serde",
- "serde_json",
- "spki",
  "tokio",
  "tracing",
  "tracing-subscriber",
