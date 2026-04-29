@@ -331,7 +331,12 @@ async fn run_workflow(iii: &III, input: Value) -> Result<Value, IIIError> {
         .and_then(Value::as_str)
         .ok_or_else(|| IIIError::Handler("workflowId is required".into()))?;
     let safe_workflow_id = sanitize_id(workflow_id).map_err(IIIError::Handler)?;
-    let agent_id = input.get("agentId").and_then(Value::as_str).map(String::from);
+    let agent_id = input
+        .get("agentId")
+        .and_then(Value::as_str)
+        .map(sanitize_id)
+        .transpose()
+        .map_err(IIIError::Handler)?;
     let user_input = input.get("input").cloned().unwrap_or(Value::Null);
 
     let workflow_value = state_get(iii, "workflows", &safe_workflow_id).await?;
@@ -408,34 +413,26 @@ async fn run_workflow(iii: &III, input: Value) -> Result<Value, IIIError> {
                     let max_retries = step.max_retries.unwrap_or(3);
                     let mut retried = false;
                     for _ in 0..max_retries {
-                        let template = step.prompt_template.as_deref().unwrap_or("{{input}}");
-                        let prompt = interpolate(template, &vars);
-                        let mut payload = vars.clone();
-                        payload.insert("prompt".into(), Value::String(prompt));
-                        match iii
-                            .trigger(TriggerRequest {
-                                function_id: step.function_id.clone(),
-                                payload: Value::Object(payload),
-                                action: None,
-                                timeout_ms: None,
-                            })
-                            .await
+                        let vars_snapshot = vars.clone();
+                        let results_len = results.len();
+                        let i_snapshot = i;
+                        let retry_start_ms = now_ms();
+                        match run_step(
+                            iii, &workflow, &step, &mut vars, &mut results, retry_start_ms,
+                            &mut i,
+                        )
+                        .await
                         {
-                            Ok(output) => {
-                                if let Some(var) = &step.output_var {
-                                    vars.insert(var.clone(), output.clone());
-                                }
-                                vars.insert("input".into(), output.clone());
-                                results.push(StepResult {
-                                    step_name: step.name.clone(),
-                                    output,
-                                    duration_ms: now_ms().saturating_sub(start_ms),
-                                    error: None,
-                                });
+                            Ok(()) => {
                                 retried = true;
                                 break;
                             }
-                            Err(_) => continue,
+                            Err(_) => {
+                                vars = vars_snapshot;
+                                results.truncate(results_len);
+                                i = i_snapshot;
+                                continue;
+                            }
                         }
                     }
                     if !retried {
@@ -512,8 +509,7 @@ async fn list_runs(iii: &III, input: Value) -> Result<Value, IIIError> {
         .map_err(|e| IIIError::Handler(e.to_string()))?;
 
     let arr = all.as_array().cloned().unwrap_or_default();
-    let total = arr.len();
-    let filtered: Vec<Value> = arr
+    let matching: Vec<Value> = arr
         .into_iter()
         .filter(|r| {
             r.get("value")
@@ -522,9 +518,9 @@ async fn list_runs(iii: &III, input: Value) -> Result<Value, IIIError> {
                 .map(|w| w == safe_workflow_id)
                 .unwrap_or(false)
         })
-        .skip(offset)
-        .take(limit)
         .collect();
+    let total = matching.len();
+    let filtered: Vec<Value> = matching.into_iter().skip(offset).take(limit).collect();
 
     Ok::<Value, IIIError>(json!({
         "runs": filtered,

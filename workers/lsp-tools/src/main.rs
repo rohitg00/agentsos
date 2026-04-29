@@ -409,30 +409,67 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .map(String::from)
                 .collect();
 
+            let dry_run = body
+                .get("dryRun")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+
             let escaped = regex::escape(old_name);
             let word_re = regex::Regex::new(&format!(r"\b{}\b", escaped))
                 .map_err(|e| IIIError::Handler(e.to_string()))?;
 
+            let mut planned: Vec<(String, String, u64)> = Vec::new();
             let mut total: u64 = 0;
-            let mut modified = 0u64;
             for file_path in &files {
                 let p = Path::new(file_path);
                 assert_path_contained(p)?;
                 let content = match tokio::fs::read_to_string(p).await {
                     Ok(c) => c,
-                    Err(_) => continue,
+                    Err(e) => {
+                        tracing::warn!(file = %file_path, error = %e, "lsp_rename read failed");
+                        continue;
+                    }
                 };
                 let count = word_re.find_iter(&content).count() as u64;
                 if count == 0 {
                     continue;
                 }
                 let updated = word_re.replace_all(&content, new_name).into_owned();
+                planned.push((file_path.clone(), updated, count));
+                total += count;
+            }
+
+            if dry_run {
+                let preview: Vec<String> = planned
+                    .iter()
+                    .map(|(f, _, _)| rel_to_root(Path::new(f)))
+                    .collect();
+                return Ok::<Value, IIIError>(http_ok(
+                    &input,
+                    json!({
+                        "oldName": old_name,
+                        "newName": new_name,
+                        "dryRun": true,
+                        "wouldModify": preview,
+                        "occurrences": total,
+                    }),
+                ));
+            }
+
+            let mut modified = 0u64;
+            let mut failed: Vec<Value> = Vec::new();
+            for (file_path, updated, count) in planned {
+                let p = Path::new(&file_path);
                 if let Err(e) = tokio::fs::write(p, updated).await {
                     tracing::error!(file = %file_path, error = %e, "lsp_rename write failed");
+                    failed.push(json!({
+                        "file": rel_to_root(p),
+                        "error": e.to_string(),
+                    }));
                     continue;
                 }
-                total += count;
                 modified += 1;
+                let _ = count;
             }
 
             Ok::<Value, IIIError>(http_ok(
@@ -442,6 +479,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     "newName": new_name,
                     "filesModified": modified,
                     "occurrences": total,
+                    "failed": failed,
                 }),
             ))
         })

@@ -50,7 +50,7 @@ async fn state_set(iii: &III, scope: &str, key: &str, value: Value) -> Result<()
     Ok(())
 }
 
-async fn state_list(iii: &III, scope: &str) -> Value {
+async fn state_list(iii: &III, scope: &str) -> Result<Value, IIIError> {
     iii.trigger(TriggerRequest {
         function_id: "state::list".to_string(),
         payload: json!({ "scope": scope }),
@@ -58,7 +58,7 @@ async fn state_list(iii: &III, scope: &str) -> Value {
         timeout_ms: None,
     })
     .await
-    .unwrap_or(json!([]))
+    .map_err(|e| IIIError::Handler(e.to_string()))
 }
 
 async fn decompose_task(iii: &III, input: Value) -> Result<Value, IIIError> {
@@ -133,15 +133,19 @@ async fn decompose_task(iii: &III, input: Value) -> Result<Value, IIIError> {
     let mut subtasks: Vec<(String, String)> = Vec::new();
     if let Some(arr) = parsed.get("subtasks").and_then(Value::as_array) {
         for sub in arr.iter().take(MAX_SUBTASKS) {
-            let id = sub.get("id").and_then(Value::as_str).unwrap_or("").to_string();
+            let raw_id = sub.get("id").and_then(Value::as_str).unwrap_or("");
+            let id = match sanitize_id(raw_id) {
+                Ok(v) => v,
+                Err(_) => {
+                    tracing::warn!(raw_id = %raw_id, "Rejected malformed subtask id from LLM");
+                    continue;
+                }
+            };
             let desc = sub
                 .get("description")
                 .and_then(Value::as_str)
                 .unwrap_or("")
                 .to_string();
-            if id.is_empty() {
-                continue;
-            }
             subtasks.push((id, desc));
         }
     }
@@ -351,7 +355,7 @@ async fn list_tasks(iii: &III, input: Value) -> Result<Value, IIIError> {
         .and_then(Value::as_str)
         .map(String::from);
 
-    let entries = state_list(iii, &format!("tasks:{root_id}")).await;
+    let entries = state_list(iii, &format!("tasks:{root_id}")).await?;
     let arr = entries.as_array().cloned().unwrap_or_default();
 
     let mut tasks: Vec<Value> = arr
@@ -382,10 +386,11 @@ async fn spawn_workers(iii: &III, input: Value) -> Result<Value, IIIError> {
         .ok_or_else(|| IIIError::Handler("rootId is required".into()))?;
     let root_id = sanitize_id(raw_root_id).map_err(IIIError::Handler)?;
 
-    let entries = state_list(iii, &format!("tasks:{root_id}")).await;
+    let entries = state_list(iii, &format!("tasks:{root_id}")).await?;
     let arr = entries.as_array().cloned().unwrap_or_default();
 
     let mut spawned = 0u64;
+    let scope = format!("tasks:{root_id}");
     for entry in arr {
         let task_val = entry.get("value").cloned().unwrap_or(entry);
         let status = task_val.get("status").and_then(Value::as_str).unwrap_or("");
@@ -402,11 +407,34 @@ async fn spawn_workers(iii: &III, input: Value) -> Result<Value, IIIError> {
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
+        if task_id.is_empty() {
+            continue;
+        }
         let description = task_val
             .get("description")
             .and_then(Value::as_str)
             .unwrap_or("")
             .to_string();
+
+        let claim = iii
+            .trigger(TriggerRequest {
+                function_id: "state::update".to_string(),
+                payload: json!({
+                    "scope": scope,
+                    "key": task_id,
+                    "operations": [
+                        { "type": "set", "path": "status", "value": "in_progress" },
+                        { "type": "set", "path": "updatedAt", "value": now_ms() }
+                    ]
+                }),
+                action: None,
+                timeout_ms: None,
+            })
+            .await;
+        if let Err(e) = claim {
+            tracing::warn!(task_id = %task_id, error = %e, "skipping task: failed to claim before spawn");
+            continue;
+        }
 
         let iii_clone = iii.clone();
         let payload = json!({

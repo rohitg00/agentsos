@@ -1,7 +1,9 @@
 use iii_sdk::{InitOptions, RegisterFunction, RegisterTriggerInput, register_worker};
 use iii_sdk::error::IIIError;
 use serde_json::{json, Map, Value};
+use std::net::IpAddr;
 use std::time::Duration;
+use url::Url;
 
 const SECURITY_HEADERS: &[(&str, &str)] = &[
     (
@@ -30,9 +32,66 @@ fn apply_to_obj(input: &Map<String, Value>) -> Map<String, Value> {
     merged
 }
 
+fn assert_safe_external_url(raw: &str) -> Result<(), IIIError> {
+    let parsed = Url::parse(raw)
+        .map_err(|e| IIIError::Handler(format!("invalid URL: {e}")))?;
+    let scheme = parsed.scheme();
+    if scheme != "https" && scheme != "http" {
+        return Err(IIIError::Handler(format!(
+            "scheme not allowed: {scheme} (only http/https)"
+        )));
+    }
+    let host = parsed
+        .host_str()
+        .ok_or_else(|| IIIError::Handler("URL has no host".into()))?;
+    let host_lc = host.to_ascii_lowercase();
+    if host_lc == "localhost"
+        || host_lc.ends_with(".localhost")
+        || host_lc.ends_with(".internal")
+        || host_lc.ends_with(".local")
+    {
+        return Err(IIIError::Handler(format!(
+            "blocked host: {host}"
+        )));
+    }
+    let ip_candidate = host_lc
+        .strip_prefix('[')
+        .and_then(|s| s.strip_suffix(']'))
+        .unwrap_or(&host_lc);
+    if let Ok(ip) = ip_candidate.parse::<IpAddr>() {
+        let blocked = match ip {
+            IpAddr::V4(v4) => {
+                v4.is_loopback()
+                    || v4.is_private()
+                    || v4.is_link_local()
+                    || v4.is_broadcast()
+                    || v4.is_unspecified()
+                    || v4.is_multicast()
+                    || v4.octets()[0] == 169 && v4.octets()[1] == 254
+            }
+            IpAddr::V6(v6) => {
+                v6.is_loopback()
+                    || v6.is_unspecified()
+                    || v6.is_multicast()
+                    || (v6.segments()[0] & 0xfe00) == 0xfc00
+                    || (v6.segments()[0] & 0xffc0) == 0xfe80
+            }
+        };
+        if blocked {
+            return Err(IIIError::Handler(format!(
+                "blocked IP literal: {host}"
+            )));
+        }
+    }
+    Ok(())
+}
+
 async fn check_url(url: &str) -> Result<Value, IIIError> {
+    assert_safe_external_url(url)?;
+
     let client = reqwest::Client::builder()
         .timeout(Duration::from_secs(10))
+        .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|e| IIIError::Handler(e.to_string()))?;
 
@@ -185,5 +244,49 @@ mod tests {
             .map(|(_, v)| *v)
             .unwrap();
         assert_eq!(cc, "no-store");
+    }
+
+    #[test]
+    fn test_assert_safe_url_accepts_public() {
+        assert!(assert_safe_external_url("https://example.com/foo").is_ok());
+        assert!(assert_safe_external_url("http://example.com").is_ok());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_localhost() {
+        assert!(assert_safe_external_url("http://localhost/foo").is_err());
+        assert!(assert_safe_external_url("https://api.localhost/").is_err());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_loopback_ip() {
+        assert!(assert_safe_external_url("http://127.0.0.1/").is_err());
+        assert!(assert_safe_external_url("http://[::1]/").is_err());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_private_ranges() {
+        assert!(assert_safe_external_url("http://10.0.0.1/").is_err());
+        assert!(assert_safe_external_url("http://192.168.1.1/").is_err());
+        assert!(assert_safe_external_url("http://172.16.0.1/").is_err());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_link_local() {
+        assert!(assert_safe_external_url("http://169.254.169.254/").is_err());
+        assert!(assert_safe_external_url("http://[fe80::1]/").is_err());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_unsupported_schemes() {
+        assert!(assert_safe_external_url("file:///etc/passwd").is_err());
+        assert!(assert_safe_external_url("gopher://example.com/").is_err());
+        assert!(assert_safe_external_url("ftp://example.com/").is_err());
+    }
+
+    #[test]
+    fn test_assert_safe_url_rejects_internal_suffix() {
+        assert!(assert_safe_external_url("https://svc.internal/").is_err());
+        assert!(assert_safe_external_url("https://api.local/").is_err());
     }
 }

@@ -317,14 +317,21 @@ async fn map_verify(iii: &III, input: Value) -> Result<Value, IIIError> {
     .await
     .map_err(|e| IIIError::Handler(e.to_string()))?;
 
-    iii.trigger(TriggerRequest {
-        function_id: "state::delete".to_string(),
-        payload: json!({ "scope": "map_challenges", "key": nonce }),
-        action: None,
-        timeout_ms: None,
-    })
-    .await
-    .map_err(|e| IIIError::Handler(e.to_string()))?;
+    if let Err(e) = iii
+        .trigger(TriggerRequest {
+            function_id: "state::delete".to_string(),
+            payload: json!({ "scope": "map_challenges", "key": nonce }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await
+    {
+        tracing::warn!(
+            error = %e,
+            responder_agent = %responder_agent,
+            "map_verify: failed to delete consumed challenge; nonce already recorded as used"
+        );
+    }
 
     let nonce_owned = nonce.to_string();
     let _iii = iii.clone();
