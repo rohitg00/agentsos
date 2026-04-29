@@ -5,9 +5,9 @@ console.log("AgentOS booting (iii-sdk registerWorker API, OTel enabled)");
 
 import "./api.js";
 import "./artifact-dag.js";
+import "./lsp-tools.js";
 import "./approval.js";
 import "./approval-tiers.js";
-import "./browser.js";
 import "./code-agent.js";
 import "./cost-tracker.js";
 import "./dashboard.js";
