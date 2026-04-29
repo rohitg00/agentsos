@@ -1,0 +1,7 @@
+iii: v1
+name: channel-webex
+language: rust
+deploy: binary
+manifest: Cargo.toml
+bin: agentos-channel-webex
+description: "Cisco Webex channel adapter — webhook + Webex REST API"

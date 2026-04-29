@@ -12,6 +12,7 @@ members = [
     "workers/channel-email",
     "workers/channel-slack",
     "workers/channel-teams",
+    "workers/channel-webex",
     "workers/channel-whatsapp",
     "workers/coordination",
     "workers/council",
