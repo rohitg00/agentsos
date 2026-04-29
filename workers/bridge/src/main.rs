@@ -145,7 +145,7 @@ async fn invoke_runtime(
         };
 
         let val = serde_json::to_value(&finished_run).unwrap();
-        let _ = iii_bg.trigger(TriggerRequest {
+        if let Err(e) = iii_bg.trigger(TriggerRequest {
             function_id: "state::set".to_string(),
             payload: json!({
             "scope": runs_scope(),
@@ -155,7 +155,10 @@ async fn invoke_runtime(
             action: None,
             timeout_ms: None,
         })
-        .await;
+        .await
+        {
+            tracing::error!(run_id = %run_id_bg, error = %e, "failed to persist terminal run state");
+        }
 
         let _ = {
             let _iii = iii_bg.clone();
@@ -270,7 +273,7 @@ async fn cancel_run(
     if let Some((_, handle)) = active_runs.remove(&req.run_id) {
         handle.abort();
 
-        let _ = iii.trigger(TriggerRequest {
+        iii.trigger(TriggerRequest {
             function_id: "state::update".to_string(),
             payload: json!({
             "scope": runs_scope(),
@@ -281,7 +284,8 @@ async fn cancel_run(
             action: None,
             timeout_ms: None,
         })
-        .await;
+        .await
+        .map_err(|e| IIIError::Handler(format!("failed to mark run {} as cancelled: {e}", req.run_id)))?;
 
         Ok(json!({ "cancelled": true, "runId": req.run_id }))
     } else {

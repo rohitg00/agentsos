@@ -34,11 +34,13 @@ export default function AnimatedCounter({
 
   useEffect(() => {
     if (!started) return;
+    const safeDuration =
+      Number.isFinite(duration) && duration > 0 ? duration : 1;
     let frameId: number;
     const startTime = performance.now();
     const animate = (now: number) => {
       const elapsed = now - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min(elapsed / safeDuration, 1);
       const eased = 1 - Math.pow(1 - progress, 3);
       setValue(Math.round(eased * end));
       if (progress < 1) frameId = requestAnimationFrame(animate);

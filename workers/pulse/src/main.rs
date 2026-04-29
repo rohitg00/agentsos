@@ -107,34 +107,33 @@ async fn register_pulse(iii: &III, req: RegisterPulseRequest) -> Result<Value, I
     let value = serde_json::to_value(&config).map_err(|e| IIIError::Handler(e.to_string()))?;
 
     iii.trigger(TriggerRequest {
+        function_id: "engine::triggers::register".to_string(),
+        payload: json!({
+            "type": "cron",
+            "function": "pulse::tick",
+            "config": {
+                "schedule": &req.cron,
+                "data": { "agentId": &req.agent_id, "realmId": &req.realm_id },
+            },
+        }),
+        action: None,
+        timeout_ms: None,
+    })
+    .await
+    .map_err(|e| IIIError::Handler(format!("failed to register cron trigger: {e}")))?;
+
+    iii.trigger(TriggerRequest {
         function_id: "state::set".to_string(),
         payload: json!({
-        "scope": config_scope(&req.realm_id),
-        "key": &req.agent_id,
-        "value": value,
-    }),
+            "scope": config_scope(&req.realm_id),
+            "key": &req.agent_id,
+            "value": value,
+        }),
         action: None,
         timeout_ms: None,
     })
     .await
     .map_err(|e| IIIError::Handler(e.to_string()))?;
-
-    let _ = iii
-        .trigger(TriggerRequest {
-            function_id: "engine::triggers::register".to_string(),
-            payload: json!({
-            "type": "cron",
-            "function": "pulse::tick",
-            "config": {
-                "schedule": req.cron,
-                "data": { "agentId": req.agent_id, "realmId": req.realm_id },
-            },
-        }),
-            action: None,
-            timeout_ms: None,
-        })
-        .await
-        .map_err(|e| IIIError::Handler(format!("failed to register cron trigger: {e}")))?;
 
     Ok(serde_json::to_value(&config).unwrap())
 }

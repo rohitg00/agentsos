@@ -138,9 +138,11 @@ export default function CodeExamples() {
                 onClick={() => setActive(i)}
                 onKeyDown={(e) => {
                   if (e.key === "ArrowRight") {
-                    selectTab((active + 1) % tabs.length);
+                    e.preventDefault();
+                    selectTab((i + 1) % tabs.length);
                   } else if (e.key === "ArrowLeft") {
-                    selectTab((active - 1 + tabs.length) % tabs.length);
+                    e.preventDefault();
+                    selectTab((i - 1 + tabs.length) % tabs.length);
                   }
                 }}
                 className={`px-4 py-2 text-sm font-mono transition-colors rounded-t-lg ${

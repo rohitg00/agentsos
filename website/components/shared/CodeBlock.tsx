@@ -138,11 +138,23 @@ function tokenize(code: string, lang: string): Token[][] {
 function isInsideString(line: string, pos: number): boolean {
   let inSingle = false;
   let inDouble = false;
+  let inTemplate = false;
+  let escaped = false;
   for (let i = 0; i < pos; i++) {
-    if (line[i] === '"' && !inSingle) inDouble = !inDouble;
-    if (line[i] === "'" && !inDouble) inSingle = !inSingle;
+    const ch = line[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      escaped = true;
+      continue;
+    }
+    if (ch === '"' && !inSingle && !inTemplate) inDouble = !inDouble;
+    else if (ch === "'" && !inDouble && !inTemplate) inSingle = !inSingle;
+    else if (ch === "`" && !inSingle && !inDouble) inTemplate = !inTemplate;
   }
-  return inSingle || inDouble;
+  return inSingle || inDouble || inTemplate;
 }
 
 export default function CodeBlock({
@@ -168,7 +180,13 @@ export default function CodeBlock({
     try {
       await navigator.clipboard.writeText(code);
       setCopied(true);
-      timerRef.current = setTimeout(() => setCopied(false), 2000);
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+      timerRef.current = setTimeout(() => {
+        setCopied(false);
+        timerRef.current = null;
+      }, 2000);
     } catch (err) {
       console.error("Clipboard write failed:", err);
     }
