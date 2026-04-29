@@ -10,9 +10,12 @@ members = [
     "workers/approval-tiers",
     "workers/bridge",
     "workers/channel-email",
+    "workers/channel-linkedin",
+    "workers/channel-reddit",
     "workers/channel-signal",
     "workers/channel-slack",
     "workers/channel-teams",
+    "workers/channel-twitch",
     "workers/channel-webex",
     "workers/channel-whatsapp",
     "workers/coordination",
@@ -55,6 +58,7 @@ members = [
 version = "0.0.1"
 edition = "2024"
 license = "Apache-2.0"
+rust-version = "1.88"
 
 [workspace.dependencies]
 iii-sdk = "=0.11.4-next.4"
@@ -64,6 +68,7 @@ serde_json = "1"
 sha2 = "0.10"
 hmac = "0.12"
 hex = "0.4"
+subtle = "2"
 uuid = { version = "1", features = ["v4"] }
 anyhow = "1"
 tracing = "0.1"

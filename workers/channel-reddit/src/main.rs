@@ -113,13 +113,28 @@ async fn send_message(
     }
 
     let url = format!("{REDDIT_API_BASE}/api/comment");
-    let res = client
+    let mut res = client
         .post(&url)
         .bearer_auth(&token)
         .form(&[("thing_id", parent_name), ("text", text)])
         .send()
         .await
         .map_err(|e| IIIError::Handler(format!("Reddit comment error: {e}")))?;
+
+    if res.status() == reqwest::StatusCode::UNAUTHORIZED {
+        token = refresh_access_token(iii, client).await?;
+        {
+            let mut guard = token_cache.lock().await;
+            *guard = token.clone();
+        }
+        res = client
+            .post(&url)
+            .bearer_auth(&token)
+            .form(&[("thing_id", parent_name), ("text", text)])
+            .send()
+            .await
+            .map_err(|e| IIIError::Handler(format!("Reddit comment error: {e}")))?;
+    }
 
     if !res.status().is_success() {
         let status = res.status();

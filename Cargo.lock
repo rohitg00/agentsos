@@ -129,8 +129,41 @@ name = "agentos-channel-email"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "hex",
  "iii-sdk",
  "lettre",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "agentos-channel-linkedin"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "hmac",
+ "iii-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "agentos-channel-reddit"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "iii-sdk",
+ "reqwest",
  "serde",
  "serde_json",
  "tokio",
@@ -184,6 +217,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "agentos-channel-twitch"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "hex",
+ "hmac",
+ "iii-sdk",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "agentos-channel-webex"
 version = "0.0.1"
 dependencies = [
@@ -202,10 +252,13 @@ name = "agentos-channel-whatsapp"
 version = "0.0.1"
 dependencies = [
  "anyhow",
+ "hex",
+ "hmac",
  "iii-sdk",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -609,7 +662,6 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "iii-sdk",
- "reqwest",
  "serde",
  "serde_json",
  "tokio",

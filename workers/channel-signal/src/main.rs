@@ -166,16 +166,21 @@ async fn handle_webhook(
     if reply.is_empty() {
         tracing::warn!(channel_key = %channel_key, "signal: agent returned empty response");
         return Ok(json!({
-            "status_code": 500,
-            "body": { "error": "Empty agent response" }
+            "status_code": 200,
+            "body": { "ok": false, "error": "Empty agent response" }
         }));
     }
 
     let api_url = get_secret(iii, "SIGNAL_API_URL").await;
     let phone = get_secret(iii, "SIGNAL_PHONE").await;
-    if let Err(e) = send_message(client, &api_url, &phone, &source, reply, group_id.as_deref()).await
+    if let Err(e) =
+        send_message(client, &api_url, &phone, &source, reply, group_id.as_deref()).await
     {
         tracing::error!(channel_key = %channel_key, error = %e, "failed to send Signal reply");
+        return Ok(json!({
+            "status_code": 200,
+            "body": { "ok": false, "error": format!("{e}") }
+        }));
     }
 
     let audit_iii = iii.clone();

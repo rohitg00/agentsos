@@ -5,6 +5,33 @@ use lettre::transport::smtp::authentication::Credentials;
 use lettre::{AsyncSmtpTransport, AsyncTransport, Tokio1Executor};
 use serde_json::{Value, json};
 
+/// Get a secret from `vault::get` first, falling back to env var, mirroring
+/// the pattern used by the other channel adapters.
+async fn get_secret(iii: &III, key: &str) -> String {
+    let result = iii
+        .trigger(TriggerRequest {
+            function_id: "vault::get".to_string(),
+            payload: json!({ "key": key }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await;
+    if let Ok(value) = result
+        && let Some(v) = value.get("value").and_then(|v| v.as_str())
+        && !v.is_empty()
+    {
+        return v.to_string();
+    }
+    std::env::var(key).unwrap_or_default()
+}
+
+/// Hash a user identifier so logs keep correlation context without leaking PII.
+fn redact(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(value.as_bytes());
+    format!("sha256:{}", hex::encode(&digest[..8]))
+}
+
 /// Resolve which agent should handle a given email recipient.
 /// Mirrors `resolveAgent(sdk, "email", to)` from src/channels/email.ts.
 async fn resolve_agent(iii: &III, channel: &str, channel_id: &str) -> String {
@@ -25,16 +52,20 @@ async fn resolve_agent(iii: &III, channel: &str, channel_id: &str) -> String {
     "default".to_string()
 }
 
-/// Build an SMTP transport from env (SMTP_HOST/SMTP_PORT/SMTP_SECURE/SMTP_USER/SMTP_PASS).
-fn build_transport() -> Result<AsyncSmtpTransport<Tokio1Executor>, IIIError> {
-    let host = std::env::var("SMTP_HOST").unwrap_or_else(|_| "localhost".to_string());
-    let port: u16 = std::env::var("SMTP_PORT")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(587);
-    let secure = std::env::var("SMTP_SECURE").map(|s| s == "true").unwrap_or(false);
-    let user = std::env::var("SMTP_USER").unwrap_or_default();
-    let pass = std::env::var("SMTP_PASS").unwrap_or_default();
+/// Build an SMTP transport, reading SMTP_* values from the vault first and
+/// falling back to env. Returns the transport plus the resolved sender (`from`).
+async fn build_transport(
+    iii: &III,
+) -> Result<(AsyncSmtpTransport<Tokio1Executor>, String), IIIError> {
+    let host = {
+        let v = get_secret(iii, "SMTP_HOST").await;
+        if v.is_empty() { "localhost".to_string() } else { v }
+    };
+    let port_raw = get_secret(iii, "SMTP_PORT").await;
+    let port: u16 = port_raw.parse().unwrap_or(587);
+    let secure = get_secret(iii, "SMTP_SECURE").await == "true";
+    let user = get_secret(iii, "SMTP_USER").await;
+    let pass = get_secret(iii, "SMTP_PASS").await;
 
     let mut builder = if secure {
         AsyncSmtpTransport::<Tokio1Executor>::relay(&host)
@@ -44,13 +75,13 @@ fn build_transport() -> Result<AsyncSmtpTransport<Tokio1Executor>, IIIError> {
     };
     builder = builder.port(port);
     if !user.is_empty() {
-        builder = builder.credentials(Credentials::new(user, pass));
+        builder = builder.credentials(Credentials::new(user.clone(), pass));
     }
-    Ok(builder.build())
+    Ok((builder.build(), user))
 }
 
-async fn send_mail(to: &str, subject: &str, text: &str) -> Result<(), IIIError> {
-    let from = std::env::var("SMTP_USER").unwrap_or_default();
+async fn send_mail(iii: &III, to: &str, subject: &str, text: &str) -> Result<(), IIIError> {
+    let (transport, from) = build_transport(iii).await?;
     if from.is_empty() {
         return Err(IIIError::Handler("SMTP_USER not configured".into()));
     }
@@ -60,7 +91,6 @@ async fn send_mail(to: &str, subject: &str, text: &str) -> Result<(), IIIError> 
         .subject(subject)
         .body(text.to_string())
         .map_err(|e| IIIError::Handler(format!("message build: {e}")))?;
-    let transport = build_transport()?;
     transport
         .send(email)
         .await
@@ -102,8 +132,14 @@ async fn handle_webhook(iii: &III, req: Value) -> Result<Value, IIIError> {
     let reply = chat.get("content").and_then(|v| v.as_str()).unwrap_or("");
     let reply_subject = format!("Re: {subject}");
 
-    if let Err(e) = send_mail(from, &reply_subject, reply).await {
-        tracing::error!(to = %from, error = %e, "failed to send email reply");
+    if !reply.trim().is_empty()
+        && let Err(e) = send_mail(iii, from, &reply_subject, reply).await
+    {
+        tracing::error!(
+            to_hash = %redact(from),
+            error = %e,
+            "failed to send email reply"
+        );
     }
 
     // Fire-and-forget audit (mirrors TriggerAction.Void()).

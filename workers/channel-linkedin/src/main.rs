@@ -1,11 +1,52 @@
+use hmac::{Hmac, Mac};
 use iii_sdk::error::IIIError;
 use iii_sdk::protocol::TriggerAction;
 use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
 use serde_json::{Value, json};
+use sha2::Sha256;
+use std::time::Duration;
+
+type HmacSha256 = Hmac<Sha256>;
 
 const LINKEDIN_API: &str = "https://api.linkedin.com/v2";
 const MAX_MESSAGE_LEN: usize = 4096;
 const MESSAGE_EVENT_KEY: &str = "com.linkedin.voyager.messaging.event.MessageEvent";
+const HTTP_TIMEOUT: Duration = Duration::from_secs(10);
+const NOTIFICATION_DEDUPE_TTL_SECS: u64 = 24 * 60 * 60;
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Compute hex-encoded HMAC-SHA256 over `body` using `secret` as the key.
+fn hmac_sha256_hex(secret: &str, body: &[u8]) -> Result<String, String> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("HMAC init error: {e}"))?;
+    mac.update(body);
+    Ok(hex::encode(mac.finalize().into_bytes()))
+}
+
+/// Verify LinkedIn `X-LI-Signature` header per
+/// https://learn.microsoft.com/en-us/linkedin/shared/api-guide/webhook-validation
+/// Header value is `hmacsha256={hex}`.
+fn verify_linkedin_signature(secret: &str, raw_body: &str, signature: &str) -> Result<(), String> {
+    if secret.is_empty() {
+        return Err("LinkedIn client secret not configured".into());
+    }
+    let computed = hmac_sha256_hex(secret, raw_body.as_bytes())?;
+    let expected = format!("hmacsha256={computed}");
+    if !constant_time_eq(expected.as_bytes(), signature.as_bytes()) {
+        return Err("Invalid LinkedIn signature".into());
+    }
+    Ok(())
+}
 
 fn split_message(text: &str, max_len: usize) -> Vec<String> {
     if text.chars().count() <= max_len {
@@ -121,40 +162,59 @@ fn extract_message_text(msg_event: &Value) -> Option<String> {
         })
 }
 
-async fn webhook_handler(
+/// Check whether `notification_id` was already processed via the `state::*`
+/// dedup scope. Returns true if newly recorded, false if duplicate.
+async fn record_notification_id(iii: &III, notification_id: &str) -> bool {
+    if notification_id.is_empty() {
+        return true;
+    }
+    let key = format!("linkedin:{notification_id}");
+    let existing = iii
+        .trigger(TriggerRequest {
+            function_id: "state::get".to_string(),
+            payload: json!({ "scope": "channel_dedupe", "key": key }),
+            action: None,
+            timeout_ms: None,
+        })
+        .await;
+    if let Ok(v) = existing
+        && v.get("seen").and_then(|s| s.as_bool()) == Some(true)
+    {
+        return false;
+    }
+    let _ = iii
+        .trigger(TriggerRequest {
+            function_id: "state::set".to_string(),
+            payload: json!({
+                "scope": "channel_dedupe",
+                "key": key,
+                "value": { "seen": true },
+                "ttl": NOTIFICATION_DEDUPE_TTL_SECS,
+            }),
+            action: Some(TriggerAction::Void),
+            timeout_ms: None,
+        })
+        .await;
+    true
+}
+
+async fn process_element(
     iii: &III,
     client: &reqwest::Client,
-    input: Value,
-) -> Result<Value, IIIError> {
-    let body = input.get("body").cloned().unwrap_or(input);
-
-    let element = body
-        .get("elements")
-        .and_then(|e| e.as_array())
-        .and_then(|arr| arr.first())
-        .cloned();
-
-    let Some(element) = element else {
-        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
-    };
-
+    element: &Value,
+) -> Result<(), IIIError> {
     let msg_event = element
         .get("event")
-        .and_then(|e| e.get(MESSAGE_EVENT_KEY))
-        .cloned();
-
+        .and_then(|e| e.get(MESSAGE_EVENT_KEY));
     let Some(msg_event) = msg_event else {
-        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
+        return Ok(());
     };
-
-    let Some(text) = extract_message_text(&msg_event) else {
-        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
+    let Some(text) = extract_message_text(msg_event) else {
+        return Ok(());
     };
-
     if text.is_empty() {
-        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
+        return Ok(());
     }
-
     let thread_id = element
         .get("entityUrn")
         .and_then(|v| v.as_str())
@@ -165,6 +225,14 @@ async fn webhook_handler(
         .and_then(|v| v.as_str())
         .unwrap_or("")
         .to_string();
+    let notification_id = element
+        .get("notificationId")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if !record_notification_id(iii, notification_id).await {
+        tracing::info!(notification_id, "linkedin: skipping duplicate notification");
+        return Ok(());
+    }
 
     let agent_id = resolve_agent(iii, "linkedin", &thread_id).await;
 
@@ -211,6 +279,106 @@ async fn webhook_handler(
             timeout_ms: None,
         })
         .await;
+    Ok(())
+}
+
+async fn webhook_handler(
+    iii: &III,
+    client: &reqwest::Client,
+    input: Value,
+) -> Result<Value, IIIError> {
+    let method = input
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("POST")
+        .to_uppercase();
+    let query = input.get("query").cloned().unwrap_or_else(|| json!({}));
+
+    // GET challenge handshake.
+    if method == "GET" {
+        let challenge = query
+            .get("challengeCode")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        if challenge.is_empty() {
+            return Ok(json!({
+                "status_code": 400,
+                "body": { "error": "Missing challengeCode" }
+            }));
+        }
+        let secret = get_secret(iii, "LINKEDIN_CLIENT_SECRET").await;
+        if secret.is_empty() {
+            return Ok(json!({
+                "status_code": 500,
+                "body": { "error": "LINKEDIN_CLIENT_SECRET not configured" }
+            }));
+        }
+        let response = match hmac_sha256_hex(&secret, challenge.as_bytes()) {
+            Ok(hex) => hex,
+            Err(e) => {
+                tracing::error!(error = %e, "linkedin: challenge HMAC failed");
+                return Ok(json!({
+                    "status_code": 500,
+                    "body": { "error": "Challenge HMAC failed" }
+                }));
+            }
+        };
+        return Ok(json!({
+            "status_code": 200,
+            "body": {
+                "challengeCode": challenge,
+                "challengeResponse": response,
+            }
+        }));
+    }
+
+    // Verify X-LI-Signature on POST.
+    let raw_body = input.get("rawBody").and_then(|v| v.as_str());
+    let signature = input
+        .get("headers")
+        .and_then(|h| h.get("x-li-signature"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if let Some(raw) = raw_body {
+        let secret = get_secret(iii, "LINKEDIN_CLIENT_SECRET").await;
+        if secret.is_empty() {
+            return Ok(json!({
+                "status_code": 500,
+                "body": { "error": "LINKEDIN_CLIENT_SECRET not configured" }
+            }));
+        }
+        if signature.is_empty() {
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Missing X-LI-Signature header" }
+            }));
+        }
+        if let Err(e) = verify_linkedin_signature(&secret, raw, signature) {
+            tracing::warn!(error = %e, "linkedin signature rejected");
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Invalid LinkedIn signature" }
+            }));
+        }
+    }
+
+    let body = input.get("body").cloned().unwrap_or(input);
+
+    let elements: Vec<Value> = body
+        .get("elements")
+        .and_then(|e| e.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    if elements.is_empty() {
+        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
+    }
+
+    for element in &elements {
+        if let Err(e) = process_element(iii, client, element).await {
+            tracing::error!(error = %e, "failed to process LinkedIn element");
+        }
+    }
 
     Ok(json!({ "status_code": 200, "body": { "ok": true } }))
 }
@@ -221,7 +389,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ws_url =
         std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
     let iii = register_worker(&ws_url, InitOptions::default());
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .build()?;
 
     let iii_clone = iii.clone();
     let client_clone = client.clone();
@@ -238,6 +408,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         trigger_type: "http".to_string(),
         function_id: "channel::linkedin::webhook".to_string(),
         config: json!({ "http_method": "POST", "api_path": "webhook/linkedin" }),
+        metadata: None,
+    })?;
+    iii.register_trigger(RegisterTriggerInput {
+        trigger_type: "http".to_string(),
+        function_id: "channel::linkedin::webhook".to_string(),
+        config: json!({ "http_method": "GET", "api_path": "webhook/linkedin" }),
         metadata: None,
     })?;
 

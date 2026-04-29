@@ -1,7 +1,11 @@
+use hmac::{Hmac, Mac};
 use iii_sdk::error::IIIError;
 use iii_sdk::protocol::TriggerAction;
 use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
 use serde_json::{Value, json};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 const TWITCH_API: &str = "https://api.twitch.tv/helix";
 const MAX_MESSAGE_LEN: usize = 500;
@@ -68,6 +72,43 @@ async fn resolve_agent(iii: &III, channel: &str, channel_id: &str) -> String {
     }
 }
 
+/// Constant-time signature comparison to defeat timing attacks.
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Verify Twitch EventSub signature per
+/// https://dev.twitch.tv/docs/eventsub/handling-webhook-events
+/// The HMAC input is `message_id + timestamp + raw_body`.
+fn verify_eventsub_signature(
+    secret: &str,
+    message_id: &str,
+    timestamp: &str,
+    raw_body: &str,
+    signature: &str,
+) -> Result<(), String> {
+    if secret.is_empty() {
+        return Err("Twitch EventSub secret not configured".into());
+    }
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("HMAC init error: {e}"))?;
+    mac.update(message_id.as_bytes());
+    mac.update(timestamp.as_bytes());
+    mac.update(raw_body.as_bytes());
+    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+    if !constant_time_eq(expected.as_bytes(), signature.as_bytes()) {
+        return Err("Invalid Twitch EventSub signature".into());
+    }
+    Ok(())
+}
+
 async fn send_message(
     iii: &III,
     client: &reqwest::Client,
@@ -82,6 +123,10 @@ async fn send_message(
     if client_id.is_empty() {
         return Err(IIIError::Handler("TWITCH_CLIENT_ID not configured".into()));
     }
+    let bot_id = get_secret(iii, "TWITCH_BOT_USER_ID").await;
+    if bot_id.is_empty() {
+        return Err(IIIError::Handler("TWITCH_BOT_USER_ID not configured".into()));
+    }
     for chunk in split_message(text, MAX_MESSAGE_LEN) {
         let url = format!("{TWITCH_API}/chat/messages");
         let res = client
@@ -91,7 +136,7 @@ async fn send_message(
             .header("Content-Type", "application/json")
             .json(&json!({
                 "broadcaster_id": broadcaster_id,
-                "sender_id": broadcaster_id,
+                "sender_id": bot_id,
                 "message": chunk,
             }))
             .send()
@@ -114,6 +159,43 @@ async fn webhook_handler(
     client: &reqwest::Client,
     input: Value,
 ) -> Result<Value, IIIError> {
+    let raw_body = input
+        .get("rawBody")
+        .and_then(|v| v.as_str())
+        .map(String::from);
+    let headers = input.get("headers").cloned().unwrap_or_else(|| json!({}));
+    let message_id = headers
+        .get("twitch-eventsub-message-id")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let timestamp = headers
+        .get("twitch-eventsub-message-timestamp")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let signature = headers
+        .get("twitch-eventsub-message-signature")
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+
+    let secret = get_secret(iii, "TWITCH_EVENTSUB_SECRET").await;
+    if !secret.is_empty()
+        && let Some(raw) = raw_body.as_deref()
+    {
+        if message_id.is_empty() || timestamp.is_empty() || signature.is_empty() {
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Missing Twitch EventSub headers" }
+            }));
+        }
+        if let Err(e) = verify_eventsub_signature(&secret, message_id, timestamp, raw, signature) {
+            tracing::warn!(error = %e, "twitch eventsub signature rejected");
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Invalid Twitch EventSub signature" }
+            }));
+        }
+    }
+
     let body = input.get("body").cloned().unwrap_or(input);
 
     // EventSub challenge handshake.

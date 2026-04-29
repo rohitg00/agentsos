@@ -1,9 +1,50 @@
 use iii_sdk::error::IIIError;
 use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
 use serde_json::{Value, json};
+use std::time::Duration;
 
 const AUTH_URL: &str = "https://login.microsoftonline.com/botframework.com/oauth2/v2.0/token";
 const MAX_MESSAGE_LEN: usize = 4096;
+const HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const HTTP_TIMEOUT: Duration = Duration::from_secs(15);
+
+/// Allowed Bot Framework `serviceUrl` hosts. Outbound replies are only sent
+/// when the inbound activity's `serviceUrl` resolves to one of these. Operators
+/// can extend the list via `TEAMS_ALLOWED_SERVICE_URLS` (comma-separated).
+const DEFAULT_ALLOWED_SERVICE_URL_SUFFIXES: &[&str] = &[
+    ".botframework.com",
+    ".botframework.azure.us",
+    ".botframework.cn",
+];
+
+fn is_allowed_service_url(url: &str, extra: &[String]) -> bool {
+    let Ok(parsed) = reqwest::Url::parse(url) else {
+        return false;
+    };
+    if parsed.scheme() != "https" {
+        return false;
+    }
+    let Some(host) = parsed.host_str() else {
+        return false;
+    };
+    if DEFAULT_ALLOWED_SERVICE_URL_SUFFIXES
+        .iter()
+        .any(|suffix| host.ends_with(suffix))
+    {
+        return true;
+    }
+    extra.iter().any(|allowed| {
+        let allowed = allowed.trim();
+        if allowed.is_empty() {
+            return false;
+        }
+        if let Ok(allowed_url) = reqwest::Url::parse(allowed) {
+            allowed_url.host_str() == Some(host)
+        } else {
+            host == allowed || host.ends_with(&format!(".{}", allowed.trim_start_matches('.')))
+        }
+    })
+}
 
 async fn get_secret(iii: &III, key: &str) -> String {
     let result = iii
@@ -63,7 +104,11 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
             _ => cutoff,
         };
         chunks.push(remaining[..split_at].to_string());
-        remaining = remaining[split_at..].to_string();
+        remaining = if split_at < cutoff && remaining.as_bytes().get(split_at) == Some(&b'\n') {
+            remaining[split_at + 1..].to_string()
+        } else {
+            remaining[split_at..].to_string()
+        };
     }
     chunks
 }
@@ -189,6 +234,22 @@ async fn handle_webhook(
 
     let reply = chat.get("content").and_then(|v| v.as_str()).unwrap_or("");
     if !reply.is_empty() {
+        let allowed_extra: Vec<String> = get_secret(iii, "TEAMS_ALLOWED_SERVICE_URLS")
+            .await
+            .split(',')
+            .map(|s| s.trim().to_string())
+            .filter(|s| !s.is_empty())
+            .collect();
+        if !is_allowed_service_url(&service_url, &allowed_extra) {
+            tracing::warn!(
+                service_url = %service_url,
+                "rejecting Teams activity with untrusted serviceUrl"
+            );
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Untrusted serviceUrl" }
+            }));
+        }
         let app_id = get_secret(iii, "TEAMS_APP_ID").await;
         let app_password = get_secret(iii, "TEAMS_APP_PASSWORD").await;
         match get_token(client, &app_id, &app_password).await {
@@ -245,7 +306,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ws_url =
         std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
     let iii = register_worker(&ws_url, InitOptions::default());
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .connect_timeout(HTTP_CONNECT_TIMEOUT)
+        .timeout(HTTP_TIMEOUT)
+        .build()?;
 
     let iii_clone = iii.clone();
     let client_clone = client.clone();
@@ -313,6 +377,32 @@ mod tests {
         let text = "x".repeat(10_000);
         let chunks = split_message(&text, 4096);
         assert_eq!(chunks.concat(), text);
+    }
+
+    #[test]
+    fn allows_known_botframework_hosts() {
+        assert!(is_allowed_service_url(
+            "https://smba.trafficmanager.net.botframework.com/amer/",
+            &[]
+        ));
+    }
+
+    #[test]
+    fn rejects_arbitrary_https_serviceurl() {
+        assert!(!is_allowed_service_url("https://attacker.example.com/", &[]));
+    }
+
+    #[test]
+    fn rejects_non_https_serviceurl() {
+        assert!(!is_allowed_service_url("http://smba.botframework.com/", &[]));
+    }
+
+    #[test]
+    fn allows_extra_configured_host() {
+        assert!(is_allowed_service_url(
+            "https://intranet.example.com/api/messages",
+            &["intranet.example.com".to_string()]
+        ));
     }
 
     #[test]
