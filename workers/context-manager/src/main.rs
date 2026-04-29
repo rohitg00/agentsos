@@ -59,6 +59,7 @@ async fn budget(iii: &III, input: Value) -> Result<Value, IIIError> {
         .await
         .ok();
 
+    let mut effective_total = total;
     if let Some(max_per_hour) = config
         .as_ref()
         .and_then(|c| c["resources"]["maxTokensPerHour"].as_i64())
@@ -72,6 +73,9 @@ async fn budget(iii: &III, input: Value) -> Result<Value, IIIError> {
                 memories: alloc.memories * ratio,
                 conversation: alloc.conversation * ratio,
             };
+            // Report the post-scale budget so callers don't see headroom that
+            // is not actually usable.
+            effective_total = effective;
         }
     }
 
@@ -109,15 +113,15 @@ async fn budget(iii: &III, input: Value) -> Result<Value, IIIError> {
     let used = system_tokens + skills_tokens + memories_tokens + conversation_tokens;
 
     Ok(json!({
-        "total": total,
+        "total": effective_total,
         "used": used,
-        "remaining": (total - used).max(0),
+        "remaining": (effective_total - used).max(0),
         "allocation": alloc,
         "sections": {
-            "systemPrompt": budget_section(total, alloc.system_prompt, system_tokens),
-            "skills": budget_section(total, alloc.skills, skills_tokens),
-            "memories": budget_section(total, alloc.memories, memories_tokens),
-            "conversation": budget_section(total, alloc.conversation, conversation_tokens),
+            "systemPrompt": budget_section(effective_total, alloc.system_prompt, system_tokens),
+            "skills": budget_section(effective_total, alloc.skills, skills_tokens),
+            "memories": budget_section(effective_total, alloc.memories, memories_tokens),
+            "conversation": budget_section(effective_total, alloc.conversation, conversation_tokens),
         }
     }))
 }
@@ -136,14 +140,34 @@ fn trim_conversation(conversation: Vec<Message>, max_tokens: i64, keep_last_n: u
         });
     }
 
-    let first: Vec<Message> = match conversation.first() {
-        Some(m) if m.role == "system" => vec![m.clone()],
-        _ => Vec::new(),
+    // Only preserve the leading system message when the tail won't already
+    // include it; otherwise the merge below would emit the same message twice
+    // and `trimmed` could go negative.
+    let preserve_first_system =
+        matches!(conversation.first(), Some(m) if m.role == "system");
+    let min_tail_start = usize::from(preserve_first_system);
+    let tail_start = conversation
+        .len()
+        .saturating_sub(keep_last_n)
+        .max(min_tail_start);
+    let first: Vec<Message> = if preserve_first_system && tail_start > 0 {
+        vec![conversation[0].clone()]
+    } else {
+        Vec::new()
     };
-    let tail_start = conversation.len().saturating_sub(keep_last_n);
     let tail: Vec<Message> = conversation[tail_start..].to_vec();
-    let first_tokens = estimate_messages_tokens(&first);
+    let mut first_tokens = estimate_messages_tokens(&first);
     let tail_tokens = estimate_messages_tokens(&tail);
+
+    // Even the preserved system prompt can exceed the budget on its own.
+    // Truncate its content so the returned conversation never breaks the
+    // contract `tokens <= max_tokens`.
+    let mut first = first;
+    if first_tokens > max_tokens && let Some(m) = first.first_mut() {
+        let max_chars = (max_tokens * 4).max(0) as usize;
+        m.content = truncate_chars(&m.content, max_chars);
+        first_tokens = estimate_messages_tokens(&first);
+    }
 
     if first_tokens + tail_tokens > max_tokens {
         let mut trimmed_tail: Vec<Message> = Vec::new();
@@ -152,14 +176,18 @@ fn trim_conversation(conversation: Vec<Message>, max_tokens: i64, keep_last_n: u
             if budget_remaining <= 0 {
                 break;
             }
-            let msg_tokens = estimate_tokens(&msg.content);
+            // Use the same per-message accounting as
+            // `estimate_messages_tokens` so we don't ignore tool_results
+            // overhead and leave the result above max_tokens.
+            let msg_tokens = estimate_messages_tokens(std::slice::from_ref(msg));
             if msg_tokens <= budget_remaining {
                 trimmed_tail.insert(0, msg.clone());
                 budget_remaining -= msg_tokens;
             } else {
-                let max_chars = (budget_remaining * 4) as usize;
+                let max_chars = (budget_remaining * 4).max(0) as usize;
                 let mut truncated = msg.clone();
                 truncated.content = truncate_chars(&msg.content, max_chars);
+                truncated.tool_results = None;
                 trimmed_tail.insert(0, truncated);
                 break;
             }
@@ -168,7 +196,8 @@ fn trim_conversation(conversation: Vec<Message>, max_tokens: i64, keep_last_n: u
         combined.extend(first.iter().cloned());
         combined.extend(trimmed_tail.iter().cloned());
         let combined_tokens = estimate_messages_tokens(&combined);
-        let trimmed_count = conversation.len() as i64 - first.len() as i64 - trimmed_tail.len() as i64;
+        let trimmed_count =
+            (conversation.len() as i64 - first.len() as i64 - trimmed_tail.len() as i64).max(0);
         return json!({
             "messages": combined,
             "trimmed": trimmed_count,
@@ -179,7 +208,7 @@ fn trim_conversation(conversation: Vec<Message>, max_tokens: i64, keep_last_n: u
     let mut result: Vec<Message> = Vec::new();
     result.extend(first.iter().cloned());
     result.extend(tail.iter().cloned());
-    let trimmed_count = conversation.len() as i64 - result.len() as i64;
+    let trimmed_count = (conversation.len() as i64 - result.len() as i64).max(0);
     json!({
         "messages": result,
         "trimmed": trimmed_count,
@@ -407,6 +436,17 @@ async fn build_prompt(iii: &III, input: Value) -> Result<Value, IIIError> {
         system_message.push_str(&format!("\n\n## Relevant Memories\n{memories_content}"));
     }
 
+    // Section-level budgets ignore the section headers and joined formatting
+    // that we just appended. If the assembled system message + conversation
+    // is over the total budget, truncate the system message until it fits so
+    // we never return a prompt with `remaining < 0`.
+    let conversation_tokens = estimate_messages_tokens(&conversation);
+    let max_system_tokens = (total - conversation_tokens).max(0);
+    if estimate_tokens(&system_message) > max_system_tokens {
+        let max_chars = (max_system_tokens * 4) as usize;
+        system_message = truncate_chars(&system_message, max_chars);
+    }
+
     let mut full_prompt: Vec<Message> = Vec::with_capacity(conversation.len() + 1);
     full_prompt.push(Message {
         role: "system".into(),
@@ -419,13 +459,12 @@ async fn build_prompt(iii: &III, input: Value) -> Result<Value, IIIError> {
     full_prompt.extend(conversation.iter().cloned());
 
     let final_tokens = estimate_messages_tokens(&full_prompt);
-    let conversation_tokens = estimate_messages_tokens(&conversation);
 
     Ok(json!({
         "messages": full_prompt,
         "tokens": final_tokens,
         "budget": total,
-        "remaining": total - final_tokens,
+        "remaining": (total - final_tokens).max(0),
         "sections": {
             "system": estimate_tokens(&system),
             "skills": skills_tokens,

@@ -184,7 +184,17 @@ async fn transition(iii: &III, input: Value) -> Result<Value, IIIError> {
                 );
             }
             "auto_recover" => {
-                fire_void(iii, "recovery::recover", json!({ "agentId": agent_id }));
+                // recovery::recover requires a `classification` to pick the
+                // correct recovery path; default to "wake-up" when the
+                // reaction payload doesn't carry one.
+                let classification = reaction.payload["classification"]
+                    .as_str()
+                    .unwrap_or("wake-up");
+                fire_void(
+                    iii,
+                    "recovery::recover",
+                    json!({ "agentId": agent_id, "classification": classification }),
+                );
             }
             "notify" => {
                 fire_void(
@@ -256,9 +266,12 @@ async fn get_state(iii: &III, input: Value) -> Result<Value, IIIError> {
 }
 
 async fn add_reaction(iii: &III, input: Value) -> Result<Value, IIIError> {
+    // agentId is optional: an empty/missing id stores the rule under the
+    // global "lifecycle_reactions" scope, which `transition` already
+    // evaluates alongside the per-agent scope (see lines 133-136).
     let agent_id = input["agentId"]
         .as_str()
-        .ok_or_else(|| IIIError::Handler("agentId required".into()))?;
+        .filter(|s| !s.is_empty());
     let from = input["from"]
         .as_str()
         .and_then(LifecycleState::from_str)
@@ -291,7 +304,10 @@ async fn add_reaction(iii: &III, input: Value) -> Result<Value, IIIError> {
         attempts: 0,
     };
 
-    let scope = format!("lifecycle_reactions:{agent_id}");
+    let scope = match agent_id {
+        Some(id) => format!("lifecycle_reactions:{id}"),
+        None => "lifecycle_reactions".to_string(),
+    };
     iii.trigger(TriggerRequest {
         function_id: "state::set".into(),
         payload: json!({

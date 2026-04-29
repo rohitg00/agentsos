@@ -31,6 +31,19 @@ struct CliResult {
     exit_code: i32,
 }
 
+/// Truncate `s` to at most `max_bytes` bytes, snapping back to a UTF-8 char
+/// boundary so multi-byte characters never cause a panic.
+fn truncate_to_char_boundary(s: &mut String, max_bytes: usize) {
+    if s.len() <= max_bytes {
+        return;
+    }
+    let mut cut = max_bytes;
+    while cut > 0 && !s.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    s.truncate(cut);
+}
+
 async fn run_skillkit(args: &[&str], timeout_ms: u64) -> CliResult {
     let mut cmd = Command::new("npx");
     cmd.arg("skillkit").args(args);
@@ -39,16 +52,29 @@ async fn run_skillkit(args: &[&str], timeout_ms: u64) -> CliResult {
         cmd.env(k, v);
     }
     cmd.current_dir(workspace_root());
+    // tokio::process::Command does NOT kill the child when the wrapping future
+    // is dropped on timeout; opt in explicitly so a slow `npx skillkit` cannot
+    // accumulate as an orphan after the request returns.
+    cmd.kill_on_drop(true);
 
     let timeout = Duration::from_millis(timeout_ms);
-    let exec = cmd.output();
+    let child = match cmd.spawn() {
+        Ok(c) => c,
+        Err(e) => {
+            return CliResult {
+                stdout: String::new(),
+                stderr: format!("spawn failed: {e}"),
+                exit_code: 1,
+            };
+        }
+    };
 
-    match tokio::time::timeout(timeout, exec).await {
+    match tokio::time::timeout(timeout, child.wait_with_output()).await {
         Ok(Ok(output)) => {
             let mut stdout = String::from_utf8_lossy(&output.stdout).to_string();
             let mut stderr = String::from_utf8_lossy(&output.stderr).to_string();
-            stdout.truncate(100_000);
-            stderr.truncate(50_000);
+            truncate_to_char_boundary(&mut stdout, 100_000);
+            truncate_to_char_boundary(&mut stderr, 50_000);
             let exit_code = output.status.code().unwrap_or(if output.status.success() { 0 } else { 1 });
             CliResult {
                 stdout,
@@ -58,14 +84,18 @@ async fn run_skillkit(args: &[&str], timeout_ms: u64) -> CliResult {
         }
         Ok(Err(e)) => CliResult {
             stdout: String::new(),
-            stderr: format!("spawn failed: {e}"),
+            stderr: format!("wait failed: {e}"),
             exit_code: 1,
         },
-        Err(_) => CliResult {
-            stdout: String::new(),
-            stderr: "skillkit timed out".to_string(),
-            exit_code: 124,
-        },
+        Err(_) => {
+            // child is dropped by returning here; kill_on_drop ensures the
+            // subprocess is reaped instead of leaked.
+            CliResult {
+                stdout: String::new(),
+                stderr: "skillkit timed out".to_string(),
+                exit_code: 124,
+            }
+        }
     }
 }
 
@@ -74,7 +104,7 @@ fn parse_json_or_raw(stdout: &str, fallback_key: &str) -> Value {
         Ok(v) => json!({ fallback_key: v, "exitCode": 0 }),
         Err(_) => {
             let mut raw = stdout.to_string();
-            raw.truncate(10_000);
+            truncate_to_char_boundary(&mut raw, 10_000);
             json!({ fallback_key: [], "raw": raw, "exitCode": 0 })
         }
     }
@@ -159,7 +189,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 Ok(v) => Ok(json!({ "installed": true, "result": v, "exitCode": 0 })),
                 Err(_) => {
                     let mut raw = result.stdout;
-                    raw.truncate(10_000);
+                    truncate_to_char_boundary(&mut raw, 10_000);
                     Ok(json!({ "installed": true, "raw": raw, "exitCode": 0 }))
                 }
             }
@@ -208,14 +238,43 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     iii.register_function(
         RegisterFunction::new_async("skillkit::scan", move |input: Value| async move {
             let scan_path = input["path"].as_str().unwrap_or(".");
-            let root = workspace_root().join(scan_path);
+            // Reject obvious traversal attempts BEFORE touching the filesystem
+            // so a malicious caller can never canonicalize a target outside the
+            // workspace via symlinks they happen to control.
+            if scan_path.contains("..") {
+                return Err(IIIError::Handler("scan path contains '..'".into()));
+            }
+            let workspace = workspace_root();
+            let workspace_canonical = tokio::fs::canonicalize(&workspace)
+                .await
+                .map_err(|e| IIIError::Handler(format!("workspace canonicalize: {e}")))?;
+            let candidate = workspace.join(scan_path);
+            if Path::new(scan_path).is_absolute() {
+                return Err(IIIError::Handler("scan path must be relative".into()));
+            }
+            // Canonicalize the joined path; if the path doesn't exist yet, the
+            // join is treated as the requested root and rejected so we never
+            // walk into something we can't verify.
+            let target = match tokio::fs::canonicalize(&candidate).await {
+                Ok(p) => p,
+                Err(e) => {
+                    return Err(IIIError::Handler(format!(
+                        "scan path canonicalize: {e}"
+                    )));
+                }
+            };
+            if !target.starts_with(&workspace_canonical) {
+                return Err(IIIError::Handler(
+                    "scan path escapes workspace root".into(),
+                ));
+            }
             let mut found: Vec<Value> = Vec::new();
-            scan_dir(&root, 0, &mut found).await;
+            scan_dir(&target, 0, &mut found).await;
             let count = found.len();
             Ok::<Value, IIIError>(json!({
                 "found": found,
                 "count": count,
-                "root": root.to_string_lossy(),
+                "root": target.to_string_lossy(),
             }))
         })
         .description("Scan workspace for .well-known/ and SKILL.md files"),

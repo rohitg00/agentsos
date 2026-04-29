@@ -19,6 +19,11 @@ pub fn chunk_markdown_aware(text: &str, min_size: usize, max_size: usize) -> Vec
 
         let mut split_at = max_size;
 
+        // Track the byte offset of the last opening fence we see in the
+        // window so we can scan for the matching closing fence AFTER it,
+        // not from a hard-coded byte 3 of the whole buffer.
+        let mut last_open_fence_byte: Option<usize> = None;
+        let mut byte_cursor = 0usize;
         let window_chars: Vec<char> = window.chars().collect();
         for i in 0..window_chars.len() {
             if i + 3 <= window_chars.len()
@@ -26,12 +31,22 @@ pub fn chunk_markdown_aware(text: &str, min_size: usize, max_size: usize) -> Vec
                 && window_chars[i + 1] == '`'
                 && window_chars[i + 2] == '`'
             {
+                if !in_code_fence {
+                    last_open_fence_byte = Some(byte_cursor);
+                }
                 in_code_fence = !in_code_fence;
             }
+            byte_cursor += window_chars[i].len_utf8();
         }
 
         if in_code_fence {
-            let fence = find_substring_after(&remaining, "```", 3);
+            // Search for the closing fence strictly after the opening fence
+            // we just detected. Searching from byte 3 of `remaining` happily
+            // re-matches the same opener when it isn't at the start.
+            let search_start = last_open_fence_byte
+                .map(|i| i + 3)
+                .unwrap_or(3);
+            let fence = find_substring_after(&remaining, "```", search_start);
             if let Some(fence_idx) = fence
                 && fence_idx < max_size * 2 {
                     let after_fence = remaining[fence_idx + 3..].find('\n');

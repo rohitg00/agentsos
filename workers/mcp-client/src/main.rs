@@ -178,7 +178,10 @@ async fn connect(state: Arc<State>, iii: &III, input: Value) -> Result<Value, II
         }
         child_cmd.stdin(std::process::Stdio::piped());
         child_cmd.stdout(std::process::Stdio::piped());
+        // Pipe + drain stderr explicitly so a chatty MCP server can't fill the
+        // pipe buffer and stall the session by blocking the writer.
         child_cmd.stderr(std::process::Stdio::piped());
+        child_cmd.kill_on_drop(true);
 
         let mut child = child_cmd
             .spawn()
@@ -186,6 +189,7 @@ async fn connect(state: Arc<State>, iii: &III, input: Value) -> Result<Value, II
 
         let stdin = child.stdin.take();
         let stdout = child.stdout.take();
+        let stderr = child.stderr.take();
         *conn.stdin.lock().await = stdin;
 
         if let Some(stdout) = stdout {
@@ -211,12 +215,32 @@ async fn connect(state: Arc<State>, iii: &III, input: Value) -> Result<Value, II
             });
         }
 
-        *conn.child.lock().await = Some(child);
-    } else if transport == "sse" && url.is_none() {
-        return Err(IIIError::Handler("SSE transport requires url".into()));
-    }
+        if let Some(stderr) = stderr {
+            let server_name = conn.name.clone();
+            tokio::spawn(async move {
+                let mut reader = BufReader::new(stderr).lines();
+                while let Ok(Some(line)) = reader.next_line().await {
+                    tracing::debug!(server = %server_name, "mcp stderr: {line}");
+                }
+            });
+        }
 
-    state.connections.insert(name.clone(), conn.clone());
+        *conn.child.lock().await = Some(child);
+    } else if transport == "sse" {
+        // SSE transport is a placeholder in this port — the stdin-based
+        // handshake below would always fail with "connection has no stdin",
+        // leaving a dead entry in state.connections. Return early instead.
+        if url.is_none() {
+            return Err(IIIError::Handler("SSE transport requires url".into()));
+        }
+        return Err(IIIError::Handler(
+            "SSE transport is not yet implemented".into(),
+        ));
+    } else {
+        return Err(IIIError::Handler(format!(
+            "unsupported transport: {transport}"
+        )));
+    }
 
     let init_result = send_rpc(
         &conn,
@@ -247,6 +271,10 @@ async fn connect(state: Arc<State>, iii: &III, input: Value) -> Result<Value, II
 
     let tool_count = tools.len();
     *conn.tools.lock().await = tools;
+
+    // Only insert AFTER initialize + tools/list succeed so a partial failure
+    // never leaves a dead handle behind for a future call to find.
+    state.connections.insert(name.clone(), conn.clone());
 
     let _ = iii
         .trigger(TriggerRequest {
@@ -300,9 +328,6 @@ async fn disconnect(state: Arc<State>, iii: &III, input: Value) -> Result<Value,
         let _ = child.kill().await;
     }
 
-    for kv in conn.pending.iter() {
-        let _ = kv.key();
-    }
     conn.pending.clear();
 
     let _ = iii
