@@ -1,9 +1,48 @@
+use hmac::{Hmac, Mac};
 use iii_sdk::error::IIIError;
 use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
 use serde_json::{Value, json};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 const WHATSAPP_API_BASE: &str = "https://graph.facebook.com/v18.0";
 const MAX_MESSAGE_LEN: usize = 4096;
+
+fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff: u8 = 0;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+/// Verify Meta's `X-Hub-Signature-256` header
+/// (https://developers.facebook.com/docs/graph-api/webhooks/getting-started)
+/// using HMAC-SHA256 of the raw body keyed by the WhatsApp app secret.
+fn verify_meta_signature(secret: &str, raw_body: &str, header: &str) -> Result<(), String> {
+    if secret.is_empty() {
+        return Err("WHATSAPP_APP_SECRET not configured".into());
+    }
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .map_err(|e| format!("HMAC init error: {e}"))?;
+    mac.update(raw_body.as_bytes());
+    let expected = format!("sha256={}", hex::encode(mac.finalize().into_bytes()));
+    if !constant_time_eq(expected.as_bytes(), header.as_bytes()) {
+        return Err("Invalid X-Hub-Signature-256".into());
+    }
+    Ok(())
+}
+
+/// SHA256(prefix-8) hash of a phone number for non-identifying error logs.
+fn redact(value: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(value.as_bytes());
+    format!("sha256:{}", hex::encode(&digest[..8]))
+}
 
 /// Get a secret from `vault::get` first, falling back to env var.
 async fn get_secret(iii: &III, key: &str) -> String {
@@ -65,7 +104,11 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
             _ => cutoff,
         };
         chunks.push(remaining[..split_at].to_string());
-        remaining = remaining[split_at..].to_string();
+        remaining = if split_at < cutoff && remaining.as_bytes().get(split_at) == Some(&b'\n') {
+            remaining[split_at + 1..].to_string()
+        } else {
+            remaining[split_at..].to_string()
+        };
     }
     chunks
 }
@@ -114,6 +157,70 @@ async fn handle_webhook(
     client: &reqwest::Client,
     req: Value,
 ) -> Result<Value, IIIError> {
+    let method = req
+        .get("method")
+        .and_then(|v| v.as_str())
+        .unwrap_or("POST")
+        .to_uppercase();
+
+    // Meta hub.challenge verification on GET.
+    if method == "GET" {
+        let query = req.get("query").cloned().unwrap_or_else(|| json!({}));
+        let mode = query.get("hub.mode").and_then(|v| v.as_str()).unwrap_or("");
+        let token = query
+            .get("hub.verify_token")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let challenge = query
+            .get("hub.challenge")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let expected = get_secret(iii, "WHATSAPP_VERIFY_TOKEN").await;
+        if mode == "subscribe"
+            && !expected.is_empty()
+            && constant_time_eq(token.as_bytes(), expected.as_bytes())
+        {
+            return Ok(json!({
+                "status_code": 200,
+                "body": challenge,
+            }));
+        }
+        return Ok(json!({
+            "status_code": 403,
+            "body": { "error": "Verification failed" }
+        }));
+    }
+
+    // Verify X-Hub-Signature-256 on POST when raw body is available.
+    let raw_body = req.get("rawBody").and_then(|v| v.as_str());
+    let signature = req
+        .get("headers")
+        .and_then(|h| h.get("x-hub-signature-256"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    if let Some(raw) = raw_body {
+        let secret = get_secret(iii, "WHATSAPP_APP_SECRET").await;
+        if secret.is_empty() {
+            return Ok(json!({
+                "status_code": 500,
+                "body": { "error": "WHATSAPP_APP_SECRET not configured" }
+            }));
+        }
+        if signature.is_empty() {
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Missing X-Hub-Signature-256 header" }
+            }));
+        }
+        if let Err(e) = verify_meta_signature(&secret, raw, signature) {
+            tracing::warn!(error = %e, "whatsapp signature rejected");
+            return Ok(json!({
+                "status_code": 401,
+                "body": { "error": "Invalid X-Hub-Signature-256" }
+            }));
+        }
+    }
+
     let body = req.get("body").cloned().unwrap_or_else(|| req.clone());
 
     if body.get("object").and_then(|v| v.as_str()) != Some("whatsapp_business_account") {
@@ -149,7 +256,7 @@ async fn handle_webhook(
         .to_string();
     let agent_id = resolve_agent(iii, "whatsapp", &from).await;
 
-    let chat = iii
+    let chat_result = iii
         .trigger(TriggerRequest {
             function_id: "agent::chat".to_string(),
             payload: json!({
@@ -160,15 +267,34 @@ async fn handle_webhook(
             action: None,
             timeout_ms: None,
         })
-        .await
-        .map_err(|e| IIIError::Handler(format!("agent::chat failed: {e}")))?;
+        .await;
 
-    let reply = chat.get("content").and_then(|v| v.as_str()).unwrap_or("");
+    let reply = match &chat_result {
+        Ok(chat) => chat
+            .get("content")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string(),
+        Err(e) => {
+            tracing::error!(
+                agent = %agent_id,
+                from_hash = %redact(&from),
+                error = %e,
+                "agent::chat failed"
+            );
+            String::new()
+        }
+    };
+
     if !reply.is_empty() {
         let token = get_secret(iii, "WHATSAPP_TOKEN").await;
         let phone_id = get_secret(iii, "WHATSAPP_PHONE_ID").await;
-        if let Err(e) = send_message(client, &token, &phone_id, &from, reply).await {
-            tracing::error!(to = %from, error = %e, "failed to send WhatsApp reply");
+        if let Err(e) = send_message(client, &token, &phone_id, &from, &reply).await {
+            tracing::error!(
+                to_hash = %redact(&from),
+                error = %e,
+                "failed to send WhatsApp reply"
+            );
         }
     }
 
@@ -217,6 +343,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         trigger_type: "http".to_string(),
         function_id: "channel::whatsapp::webhook".to_string(),
         config: json!({ "http_method": "POST", "api_path": "webhook/whatsapp" }),
+        metadata: None,
+    })?;
+    iii.register_trigger(RegisterTriggerInput {
+        trigger_type: "http".to_string(),
+        function_id: "channel::whatsapp::webhook".to_string(),
+        config: json!({ "http_method": "GET", "api_path": "webhook/whatsapp" }),
         metadata: None,
     })?;
 

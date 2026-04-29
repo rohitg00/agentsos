@@ -1,9 +1,15 @@
 use iii_sdk::error::IIIError;
 use iii_sdk::{III, InitOptions, RegisterFunction, RegisterTriggerInput, TriggerRequest, register_worker};
 use serde_json::{Value, json};
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 const API_URL: &str = "https://webexapis.com/v1";
 const MAX_MESSAGE_LEN: usize = 7439;
+
+/// Process-local cache of the bot's own `personId`, populated lazily so we do
+/// not hit `/v1/people/me` on every webhook delivery.
+type BotIdCache = Arc<RwLock<Option<String>>>;
 
 async fn get_secret(iii: &III, key: &str) -> String {
     let result = iii
@@ -63,7 +69,11 @@ fn split_message(text: &str, max_len: usize) -> Vec<String> {
             _ => cutoff,
         };
         chunks.push(remaining[..split_at].to_string());
-        remaining = remaining[split_at..].to_string();
+        remaining = if split_at < cutoff && remaining.as_bytes().get(split_at) == Some(&b'\n') {
+            remaining[split_at + 1..].to_string()
+        } else {
+            remaining[split_at..].to_string()
+        };
     }
     chunks
 }
@@ -80,7 +90,12 @@ async fn fetch_message(
         .await
         .map_err(|e| IIIError::Handler(format!("Webex fetch error: {e}")))?;
     if !resp.status().is_success() {
-        return Ok(None);
+        let status = resp.status();
+        let body = resp.text().await.unwrap_or_default();
+        return Err(IIIError::Handler(format!(
+            "Webex fetch failed ({status}): {}",
+            body.chars().take(300).collect::<String>()
+        )));
     }
     let body: Value = resp
         .json()
@@ -90,6 +105,23 @@ async fn fetch_message(
         .get("text")
         .and_then(|v| v.as_str())
         .map(String::from))
+}
+
+/// Fetch the bot's own personId from `/v1/people/me` so we can drop self-posted
+/// webhook events. Returns `None` on any failure so the caller can skip the
+/// guard and continue processing.
+async fn fetch_bot_person_id(client: &reqwest::Client, token: &str) -> Option<String> {
+    let resp = client
+        .get(format!("{API_URL}/people/me"))
+        .bearer_auth(token)
+        .send()
+        .await
+        .ok()?;
+    if !resp.status().is_success() {
+        return None;
+    }
+    let body: Value = resp.json().await.ok()?;
+    body.get("id").and_then(|v| v.as_str()).map(String::from)
 }
 
 async fn send_message(
@@ -121,6 +153,7 @@ async fn send_message(
 async fn handle_webhook(
     iii: &III,
     client: &reqwest::Client,
+    bot_id_cache: &BotIdCache,
     req: Value,
 ) -> Result<Value, IIIError> {
     let body = req.get("body").cloned().unwrap_or_else(|| req.clone());
@@ -153,6 +186,29 @@ async fn handle_webhook(
             "status_code": 500,
             "body": { "error": "WEBEX_TOKEN not configured" }
         }));
+    }
+
+    // Drop self-posted messages so the bot does not loop on its own replies.
+    let bot_id = {
+        let cached = bot_id_cache.read().await.clone();
+        match cached {
+            Some(id) => Some(id),
+            None => {
+                let fetched = fetch_bot_person_id(client, &webex_token).await;
+                if let Some(id) = &fetched {
+                    let mut guard = bot_id_cache.write().await;
+                    if guard.is_none() {
+                        *guard = Some(id.clone());
+                    }
+                }
+                fetched
+            }
+        }
+    };
+    if let Some(id) = bot_id.as_deref()
+        && id == person_id
+    {
+        return Ok(json!({ "status_code": 200, "body": { "ok": true } }));
     }
 
     let text = match fetch_message(client, &webex_token, &message_id).await? {
@@ -217,14 +273,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::env::var("III_WS_URL").unwrap_or_else(|_| "ws://localhost:49134".to_string());
     let iii = register_worker(&ws_url, InitOptions::default());
     let client = reqwest::Client::new();
+    let bot_id_cache: BotIdCache = Arc::new(RwLock::new(None));
 
     let iii_clone = iii.clone();
     let client_clone = client.clone();
+    let cache_clone = bot_id_cache.clone();
     iii.register_function(
         RegisterFunction::new_async("channel::webex::webhook", move |input: Value| {
             let iii = iii_clone.clone();
             let client = client_clone.clone();
-            async move { handle_webhook(&iii, &client, input).await }
+            let cache = cache_clone.clone();
+            async move { handle_webhook(&iii, &client, &cache, input).await }
         })
         .description("Handle Cisco Webex webhook"),
     );
